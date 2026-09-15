@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f0a09">
+  <title>KeySax</title>
+  <link rel="icon" href="icon.png">
+  <link rel="apple-touch-icon" href="icon-512.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="gate" id="gate">
+    <button type="button" id="start">Tap to play KeySax</button>
+  </div>
+
+  <header>
+    <img src="icon.png" alt="">
+    <div>
+      <h1>KeySax</h1>
+      <p id="status">Phone, tablet, or keyboard. No account.</p>
+    </div>
+    <div class="grow"></div>
+    <div class="tools">
+      <button class="chip" id="sustain" type="button">Sustain</button>
+      <button class="chip" id="record" type="button">Record</button>
+    </div>
+  </header>
+
+  <div id="rows"></div>
+  <div class="row">
+    <div class="row-bar"><h2>SPACE</h2><span style="color:var(--muted);font-size:12px">Bass thump</span></div>
+    <button class="pad space" id="space" type="button" data-space="1"><small>space</small><b>Thump</b></button>
+  </div>
+
+  <div class="letter" id="letter"></div>
+
+  <div class="modal" id="export" hidden>
+    <div class="sheet">
+      <h3>Download</h3>
+      <p id="sentence-preview"></p>
+      <button class="choice" data-export="lettersAudio"><b>Letters + audio</b><span>One letter per frame, with sound</span></button>
+      <button class="choice" data-export="lettersVideo"><b>Letters only</b><span>Silent video of each key</span></button>
+      <button class="choice" data-export="sentenceAudio"><b>Sentence + audio</b><span>Letters, then the full sentence</span></button>
+      <button class="choice" data-export="sentenceVideo"><b>Sentence only</b><span>Just the spelled sentence</span></button>
+      <button class="choice" data-export="audioOnly"><b>Audio only</b><span>WAV recording</span></button>
+      <button class="chip" id="export-cancel" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

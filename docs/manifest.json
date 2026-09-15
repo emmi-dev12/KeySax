@@ -1,0 +1,13 @@
+{
+  "name": "KeySax",
+  "short_name": "KeySax",
+  "description": "Play sax, piano, guitar, drums, and ASMR sounds in the browser.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f0a09",
+  "theme_color": "#0f0a09",
+  "icons": [
+    { "src": "icon.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -6,6 +6,14 @@ A native macOS instrument. Press **1–0** and a saxophone answers immediately �
 
 Sounds are synthesized on this Mac (additive sax plus an optional reed/waveguide engine). Nothing is streamed, licensed, or downloaded after install.
 
+## Play in the browser
+
+Phone and tablet (and desktop) — no install:
+
+**https://emmi-dev12.github.io/KeySax/**
+
+Tap **Tap to play KeySax**, then use the on-screen pads. Add to Home Screen for a fullscreen app.
+
 ## Requirements
 
 - macOS 27
