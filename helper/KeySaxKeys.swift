@@ -1,4 +1,5 @@
 import AppKit
+import WebKit
 import ApplicationServices
 import Darwin
 import Foundation
@@ -14,45 +15,89 @@ enum KeySaxKeysMain {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     static var shared: AppDelegate?
 
     var statusItem: NSStatusItem?
     var routeItem: NSMenuItem?
+    var webView: WKWebView!
+    var pageReady = false
     var enabled = true
     var tap: CFMachPort?
+    var tapFailed = false
     var serverFD: Int32 = -1
-    let hub = SSEHub()
-    var pingTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+        setupWebView()
         setupMenu()
-        startTap()
         startStatusServer()
-        startPing()
         promptAccessibilityIfNeeded()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            self?.ensureKeySaxInBackground()
-            self?.refreshRouteStatus()
+        startTap()
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            if self.tap == nil { self.startTap() }
+            self.keepAudioAlive()
+            self.refreshRouteStatus()
         }
+    }
+
+    private func setupWebView() {
+        let cfg = WKWebViewConfiguration()
+        cfg.mediaTypesRequiringUserActionForPlayback = []
+        cfg.suppressesIncrementalRendering = false
+        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 900, height: 700), configuration: cfg)
+        webView.navigationDelegate = self
+        let win = NSWindow(
+            contentRect: NSRect(x: -4000, y: -4000, width: 900, height: 700),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        win.isReleasedWhenClosed = false
+        win.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        win.ignoresMouseEvents = true
+        win.contentView = webView
+        win.orderBack(nil)
+        if let url = URL(string: "https://emmi-dev12.github.io/KeySax/?helper=1") {
+            webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30))
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if let prefs = UserDefaults.standard.string(forKey: "keysax-prefs"), !prefs.isEmpty {
+            applyPrefs(prefs)
+        }
+        webView.evaluateJavaScript("keepAlive=true;typeof unlock==='function'&&unlock();true;") { _, _ in
+            self.pageReady = true
+            self.refreshRouteStatus()
+        }
+    }
+
+    private func keepAudioAlive() {
+        guard pageReady else { return }
+        webView.evaluateJavaScript(
+            "keepAlive=true;typeof unlock==='function'&&unlock();if(window.ctx&&ctx.state==='suspended')ctx.resume();true;",
+            completionHandler: nil
+        )
     }
 
     private func setupMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.button?.title = "🎷"
-        statusItem?.button?.toolTip = "KeySax Keys — listener"
+        statusItem?.button?.toolTip = "KeySax Keys"
         let menu = NSMenu()
         let toggle = NSMenuItem(title: "Play keys in other apps", action: #selector(toggleEnabled), keyEquivalent: "")
         toggle.state = .on
         toggle.target = self
         menu.addItem(toggle)
-        let route = NSMenuItem(title: "Waiting for KeySax…", action: nil, keyEquivalent: "")
+        let route = NSMenuItem(title: "Loading KeySax sounds…", action: nil, keyEquivalent: "")
         route.isEnabled = false
         routeItem = route
         menu.addItem(route)
         menu.addItem(NSMenuItem(title: "Open KeySax", action: #selector(openKeySax), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Device Control & Data Access…", action: #selector(openAccessibility), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Input Monitoring…", action: #selector(openInputMonitoring), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit KeySax Keys", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem?.menu = menu
@@ -87,18 +132,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc private func openInputMonitoring() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     private func promptAccessibilityIfNeeded() {
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(opts)
-    }
-
-    private func ensureKeySaxInBackground() {
-        if !runningKeySax().isEmpty { return }
-        guard let url = installedKeySaxApps().first else { return }
-        let cfg = NSWorkspace.OpenConfiguration()
-        cfg.activates = false
-        cfg.addsToRecentItems = false
-        NSWorkspace.shared.openApplication(at: url, configuration: cfg)
+        CGRequestListenEventAccess()
     }
 
     private func runningKeySax() -> [NSRunningApplication] {
@@ -137,36 +180,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func refreshRouteStatus() {
-        let n = hub.count
-        let running = !runningKeySax().isEmpty
         if !enabled {
             routeItem?.title = "Listener paused"
-        } else if n > 0 {
-            routeItem?.title = "Routing keys to KeySax"
-        } else if running {
-            routeItem?.title = "KeySax is open — waiting to connect"
+        } else if tap == nil {
+            routeItem?.title = "Needs Device Control & Data Access"
+        } else if !pageReady {
+            routeItem?.title = "Loading KeySax sounds…"
         } else {
-            routeItem?.title = "Open KeySax to hear keys"
+            routeItem?.title = "Playing KeySax sounds as you type"
         }
     }
 
     private func startTap() {
+        if tap != nil { return }
         let mask = CGEventMask(1 << CGEventType.keyDown.rawValue) | CGEventMask(1 << CGEventType.keyUp.rawValue)
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: mask,
-            callback: { _, type, event, _ in
-                AppDelegate.shared?.handle(type: type, event: event)
-                return Unmanaged.passUnretained(event)
-            },
-            userInfo: nil
-        ) else { return }
-        self.tap = tap
-        let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        let created =
+            CGEvent.tapCreate(
+                tap: .cghidEventTap,
+                place: .tailAppendEventTap,
+                options: .defaultTap,
+                eventsOfInterest: mask,
+                callback: { _, type, event, _ in
+                    AppDelegate.shared?.handle(type: type, event: event)
+                    return Unmanaged.passUnretained(event)
+                },
+                userInfo: nil
+            ) ?? CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .headInsertEventTap,
+                options: .listenOnly,
+                eventsOfInterest: mask,
+                callback: { _, type, event, _ in
+                    AppDelegate.shared?.handle(type: type, event: event)
+                    return Unmanaged.passUnretained(event)
+                },
+                userInfo: nil
+            )
+        guard let created else {
+            tapFailed = true
+            refreshRouteStatus()
+            return
+        }
+        tap = created
+        tapFailed = false
+        let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, created, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        CGEvent.tapEnable(tap: created, enable: true)
+        refreshRouteStatus()
     }
 
     fileprivate func handle(type: CGEventType, event: CGEvent) {
@@ -174,7 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             CGEvent.tapEnable(tap: tap, enable: true)
             return
         }
-        guard enabled else { return }
+        guard enabled, pageReady else { return }
         guard type == .keyDown || type == .keyUp else { return }
         if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return }
         if event.flags.contains(.maskCommand) || event.flags.contains(.maskControl) { return }
@@ -183,26 +243,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let code = Self.codeMap[keyCode] else { return }
         let down = type == .keyDown
         let shift = event.flags.contains(.maskShift)
-        let payload = "{\"code\":\"\(code)\",\"down\":\(down),\"shift\":\(shift)}"
-        if hub.count > 0 {
-            hub.send("data: \(payload)\n\n")
-            return
-        }
-        let targets = keySaxEventTargets()
-        let webContent = targets.filter { ($0.bundleIdentifier ?? "") == "com.apple.WebKit.WebContent" }
-        let dest = webContent.isEmpty ? targets : webContent
-        for app in dest {
-            event.postToPid(app.processIdentifier)
+        let js = "window.keysaxFromHelper && window.keysaxFromHelper(\(Self.jsString(code)),\(down),\(shift))"
+        DispatchQueue.main.async {
+            self.webView.evaluateJavaScript(js, completionHandler: nil)
         }
     }
 
-    private func keySaxEventTargets() -> [NSRunningApplication] {
-        NSWorkspace.shared.runningApplications.filter { app in
-            if isInstalledKeySax(app) { return true }
-            let bid = app.bundleIdentifier ?? ""
-            let name = app.localizedName ?? ""
-            return bid == "com.apple.WebKit.WebContent" && name.localizedCaseInsensitiveContains("keysax")
+    func applyPrefs(_ json: String) {
+        UserDefaults.standard.set(json, forKey: "keysax-prefs")
+        let js = """
+        (function(){
+          try { localStorage.setItem("keysax-pwa-v1", \(Self.jsString(json))); } catch (e) {}
+          if (typeof load === "function") { load(); applyForm(); fillRowSettings(); render(); }
+          keepAlive = true;
+          true;
+        })()
+        """
+        DispatchQueue.main.async {
+            self.webView.evaluateJavaScript(js, completionHandler: nil)
         }
+    }
+
+    private static func jsString(_ s: String) -> String {
+        let data = try? JSONSerialization.data(withJSONObject: s)
+        return String(data: data ?? Data("\"\"".utf8), encoding: .utf8) ?? "\"\""
     }
 
     private static let codeMap: [UInt16: String] = [
@@ -223,15 +287,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         0x4E: "NumpadSubtract", 0x43: "NumpadMultiply", 0x4B: "NumpadDivide"
     ]
 
-    private func startPing() {
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 12, repeats: true) { [weak self] _ in
-            self?.hub.send(": ping\n\n")
-            self?.refreshRouteStatus()
-        }
-    }
-
     private func corsHeaders() -> String {
-        "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nAccess-Control-Allow-Private-Network: true\r\n"
+        "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nAccess-Control-Allow-Private-Network: true\r\n"
     }
 
     private func startStatusServer() {
@@ -259,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if client < 0 { continue }
                 var nosig: Int32 = 1
                 Darwin.setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &nosig, socklen_t(MemoryLayout<Int32>.size))
-                var buf = [UInt8](repeating: 0, count: 2048)
+                var buf = [UInt8](repeating: 0, count: 8192)
                 let n = Darwin.read(client, &buf, buf.count)
                 let req = n > 0 ? String(bytes: buf.prefix(n), encoding: .utf8) ?? "" : ""
                 let first = req.split(whereSeparator: { $0 == "\r" || $0 == "\n" }).first.map(String.init) ?? ""
@@ -273,51 +330,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     Darwin.close(client)
                     continue
                 }
-                if path == "/keys" {
-                    let res = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache, no-store\r\nConnection: keep-alive\r\n\(owner.corsHeaders())\r\nretry: 1000\n\n"
+                if method == "POST" && path == "/prefs" {
+                    var body = ""
+                    if let r = req.range(of: "\r\n\r\n") {
+                        body = String(req[r.upperBound...])
+                    }
+                    body = body.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if body.hasPrefix("{") {
+                        owner.applyPrefs(body)
+                    }
+                    let ok = "{\"ok\":true}"
+                    let res = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\(owner.corsHeaders())Content-Length: \(ok.utf8.count)\r\nConnection: close\r\n\r\n\(ok)"
                     res.withCString { _ = Darwin.write(client, $0, strlen($0)) }
-                    owner.hub.add(client)
-                    DispatchQueue.main.async { owner.refreshRouteStatus() }
+                    Darwin.close(client)
                     continue
                 }
-                let body = "{\"ok\":true,\"name\":\"KeySax Keys\",\"clients\":\(owner.hub.count)}"
+                let body = "{\"ok\":true,\"name\":\"KeySax Keys\",\"ready\":\(owner.pageReady),\"tap\":\(owner.tap != nil)}"
                 let res = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\(owner.corsHeaders())Content-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
                 res.withCString { _ = Darwin.write(client, $0, strlen($0)) }
                 Darwin.close(client)
             }
-        }
-    }
-}
-
-final class SSEHub {
-    private let lock = NSLock()
-    private var clients: [Int32] = []
-
-    var count: Int {
-        lock.lock(); defer { lock.unlock() }
-        return clients.count
-    }
-
-    func add(_ fd: Int32) {
-        lock.lock()
-        clients.append(fd)
-        lock.unlock()
-    }
-
-    func send(_ chunk: String) {
-        lock.lock()
-        let fds = clients
-        lock.unlock()
-        var dead: [Int32] = []
-        for fd in fds {
-            let n = chunk.withCString { Darwin.write(fd, $0, strlen($0)) }
-            if n <= 0 { dead.append(fd) }
-        }
-        if !dead.isEmpty {
-            lock.lock()
-            clients.removeAll { dead.contains($0) }
-            lock.unlock()
-            dead.forEach { Darwin.close($0) }
         }
     }
 }

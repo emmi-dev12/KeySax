@@ -188,7 +188,7 @@
         <label class="field switch-field">Keep playing in the background
           <input id="keep-alive" type="checkbox" role="switch">
         </label>
-        <p class="fine">Keeps this KeySax sounding after you click another app. Leave the window open in the background.</p>
+        <p class="fine">Keeps this window sounding after you click away. Typing in other apps is handled by the menu-bar listener.</p>
       </div>
 
       <div class="tab-panel" id="tab-keys" hidden>
@@ -202,7 +202,7 @@
         </div>
         <p class="fine" id="listener-status">Mac: keys in other apps need the KeySax Keys listener.</p>
         <a class="glass-btn" id="install-listener" href="helper/KeySaxKeys.zip">Download KeySax Keys</a>
-        <p class="fine">Unzip, then double-click Open.command (or right-click the app → Open). Allow Device Control and Data Access. The saxophone in the menu bar only listens — it sends keys into this installed KeySax, so your settings and sounds stay here. Leave KeySax open in the background.</p>
+        <p class="fine">Unzip, then double-click Open.command (or right-click the app → Open). Allow Device Control and Data Access. The saxophone in the menu bar plays KeySax sounds while you type in other apps — same idea as Thock or Klack. This window is for playing and changing settings.</p>
       </div>
 
       <div class="tab-panel" id="tab-midi" hidden>
@@ -237,6 +237,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

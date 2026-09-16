@@ -74,6 +74,8 @@ let midiAccess = null;
 let midiDestIndex = 0;
 let deferredInstall = null;
 const STORE = "keysax-pwa-v1";
+const isHelperHost = new URLSearchParams(location.search).get("helper") === "1";
+if (isHelperHost) keepAlive = true;
 
 const drops = [];
 let sentence = "";
@@ -1364,6 +1366,14 @@ function prefsSnapshot() {
 function save() {
   const payload = JSON.stringify(prefsSnapshot());
   try { localStorage.setItem(STORE, payload); } catch (_) {}
+  if (!isHelperHost) {
+    fetch("http://127.0.0.1:18765/prefs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      cache: "no-store"
+    }).catch(() => {});
+  }
 }
 
 function load() {
@@ -1785,6 +1795,7 @@ function onHelperConnected() {
 }
 
 function connectHelperKeys() {
+  if (isHelperHost) return;
   if (helperES) return;
   try {
     helperES = new EventSource("http://127.0.0.1:18765/keys");
@@ -1826,7 +1837,9 @@ function pollListener() {
     .then(j => {
       if (helperConnected) return;
       setListenerStatus(j.ok
-        ? "Mac key listener is running. Leave this KeySax open in the background so typing in other apps uses these settings."
+        ? (j.tap === false
+          ? "Mac key listener needs Device Control and Data Access (and maybe Input Monitoring)."
+          : "Mac key listener is running. Type in other apps — the menu-bar saxophone plays the sounds.")
         : "Mac key listener is off.");
     })
     .catch(() => {
@@ -1870,4 +1883,4 @@ document.addEventListener("visibilitychange", () => {
   if (keepAlive && ctx && ctx.state === "suspended") ctx.resume();
 });
 setInterval(() => { if (keepAlive && ctx && ctx.state === "suspended") ctx.resume(); }, 2500);
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
+if ("serviceWorker" in navigator && !isHelperHost) navigator.serviceWorker.register("./sw.js").catch(() => {});
