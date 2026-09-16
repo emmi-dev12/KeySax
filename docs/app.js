@@ -38,6 +38,7 @@ const ROWS = [
   { id: "qwerty", title: "QWERTY", codes: ["KeyQ","KeyW","KeyE","KeyR","KeyT","KeyY","KeyU","KeyI","KeyO","KeyP","BracketLeft","BracketRight","Backslash"], labels: ["Q","W","E","R","T","Y","U","I","O","P","[","]","\\"], voice: "kalimba", oct: 4, tr: 0 },
   { id: "home", title: "HOME", codes: ["KeyA","KeyS","KeyD","KeyF","KeyG","KeyH","KeyJ","KeyK","KeyL","Semicolon","Quote"], labels: ["A","S","D","F","G","H","J","K","L",";","'"], voice: "piano", oct: 4, tr: 0 },
   { id: "bottom", title: "BOTTOM", codes: ["KeyZ","KeyX","KeyC","KeyV","KeyB","KeyN","KeyM","Comma","Period","Slash"], labels: ["Z","X","C","V","B","N","M",",",".","/"], voice: "guitar", oct: 4, tr: 0 },
+  { id: "numpad", title: "NUMPAD", codes: ["Numpad7","Numpad8","Numpad9","NumpadSubtract","Numpad4","Numpad5","Numpad6","NumpadAdd","Numpad1","Numpad2","Numpad3","NumpadEnter","Numpad0","NumpadDecimal","NumpadDivide","NumpadMultiply"], labels: ["7","8","9","−","4","5","6","+","1","2","3","↵","0",".","/","*"], voice: "drums", oct: 4, tr: 0 },
 ];
 
 const lookup = {};
@@ -936,8 +937,8 @@ function drawApp(g, W, H, now) {
 
   const marginX = W * 0.04;
   const top = H * 0.13;
-  const area = H * 0.7;
-  const rowH = area / 5;
+  const area = H * 0.72;
+  const rowH = area / (ROWS.length + 1);
   ROWS.forEach((row, ri) => {
     const y0 = top + ri * rowH;
     const v = voiceById(row.voice);
@@ -972,7 +973,7 @@ function drawApp(g, W, H, now) {
       g.fillText(n.caption, x + pw / 2, padsY + padsH * 0.68);
     });
   });
-  const spaceY = top + 4 * rowH + rowH * 0.26;
+  const spaceY = top + ROWS.length * rowH + rowH * 0.22;
   const spaceH = rowH * 0.5;
   const onSpace = live.has("space");
   g.fillStyle = onSpace ? "#6b5cc7" : "rgba(107,92,199,0.22)";
@@ -1422,7 +1423,7 @@ function fillRowSettings() {
   ROWS.forEach((row, ri) => {
     const lab = document.createElement("label");
     lab.className = "field";
-    lab.append({ numbers: "Number row", qwerty: "QWERTY row", home: "Home row", bottom: "Bottom row" }[row.id] || row.title);
+    lab.append({ numbers: "Number row", qwerty: "QWERTY row", home: "Home row", bottom: "Bottom row", numpad: "Numpad" }[row.id] || row.title);
     const sel = document.createElement("select");
     let group = "", og = null;
     VOICES.forEach(voice => {
@@ -1741,6 +1742,37 @@ window.addEventListener("beforeinstallprompt", e => {
   deferredInstall = e;
   showInstallHints();
 });
+window.keysaxFromHelper = function (code, down, shift) {
+  unlock();
+  if (code === "Space") { down ? spaceOn() : spaceOff(); return; }
+  const hit = lookup[code];
+  if (hit) {
+    const [ri, i] = hit;
+    const id = `${ROWS[ri].id}-${i}`;
+    down ? noteOn(id, ROWS[ri], i, !!shift) : noteOff(id);
+    return;
+  }
+  if (!down) { noteOff("any-" + code); return; }
+  const row = ROWS[2];
+  const ns = notesFor(row);
+  let h = 0;
+  for (let i = 0; i < code.length; i++) h = Math.imul(h, 31) + code.charCodeAt(i);
+  noteOn("any-" + code, row, Math.abs(h) % ns.length, !!shift);
+};
+
+function pollListener() {
+  const el = document.getElementById("listener-status");
+  if (!el) return;
+  fetch("http://127.0.0.1:18765/status", { cache: "no-store" })
+    .then(r => r.json())
+    .then(j => {
+      el.textContent = j.ok ? "Mac key listener is running. Type in other apps — KeySax will sound." : "Mac key listener is off.";
+    })
+    .catch(() => { el.textContent = "Mac key listener is off."; });
+}
+pollListener();
+setInterval(pollListener, 4000);
+
 window.addEventListener("appinstalled", () => {
   deferredInstall = null;
   showInstallHints();
