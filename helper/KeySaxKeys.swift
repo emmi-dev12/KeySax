@@ -186,8 +186,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let payload = "{\"code\":\"\(code)\",\"down\":\(down),\"shift\":\(shift)}"
         if hub.count > 0 {
             hub.send("data: \(payload)\n\n")
-        } else if let app = runningKeySax().first {
+            return
+        }
+        let targets = keySaxEventTargets()
+        let webContent = targets.filter { ($0.bundleIdentifier ?? "") == "com.apple.WebKit.WebContent" }
+        let dest = webContent.isEmpty ? targets : webContent
+        for app in dest {
             event.postToPid(app.processIdentifier)
+        }
+    }
+
+    private func keySaxEventTargets() -> [NSRunningApplication] {
+        NSWorkspace.shared.runningApplications.filter { app in
+            if isInstalledKeySax(app) { return true }
+            let bid = app.bundleIdentifier ?? ""
+            let name = app.localizedName ?? ""
+            return bid == "com.apple.WebKit.WebContent" && name.localizedCaseInsensitiveContains("keysax")
         }
     }
 
