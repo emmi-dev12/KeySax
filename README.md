@@ -22,6 +22,7 @@ ABC / QWERTY. Each row has its own sound, octave, and transpose. Symbols play to
 | `Q W E R T Y U I O P [ ] \\` | Kalimba |
 | `A S D F G H J K L ; '` | Piano |
 | `Z X C V B N M , . /` | Guitar |
+| Numpad | Drums |
 | Space | Bass thump |
 
 | Key | Action |
@@ -36,8 +37,6 @@ ABC / QWERTY. Each row has its own sound, octave, and transpose. Symbols play to
 | `⌘⇧L` | Random solo |
 
 Settings (scale, root, engine, appearance, MIDI, row sounds) are stored in the browser on this device.
-
-On a Mac, **KeySax Keys** (menu-bar saxophone) plays KeySax sounds while you type in other apps, the same way Thock or Klack do. Leave it running in the menu bar.
 
 ## License
 

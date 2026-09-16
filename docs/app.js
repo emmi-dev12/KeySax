@@ -74,8 +74,6 @@ let midiAccess = null;
 let midiDestIndex = 0;
 let deferredInstall = null;
 const STORE = "keysax-pwa-v1";
-const isHelperHost = new URLSearchParams(location.search).get("helper") === "1";
-if (isHelperHost) keepAlive = true;
 
 const drops = [];
 let sentence = "";
@@ -1366,14 +1364,6 @@ function prefsSnapshot() {
 function save() {
   const payload = JSON.stringify(prefsSnapshot());
   try { localStorage.setItem(STORE, payload); } catch (_) {}
-  if (!isHelperHost) {
-    fetch("http://127.0.0.1:18765/prefs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: payload,
-      cache: "no-store"
-    }).catch(() => {});
-  }
 }
 
 function load() {
@@ -1747,109 +1737,6 @@ window.addEventListener("beforeinstallprompt", e => {
   deferredInstall = e;
   showInstallHints();
 });
-window.keysaxFromHelper = function (code, down, shift) {
-  unlock();
-  if (keepAlive && ctx && ctx.state === "suspended") ctx.resume();
-  if (code === "Space") { down ? spaceOn() : spaceOff(); return; }
-  const hit = lookup[code];
-  if (hit) {
-    const [ri, i] = hit;
-    const id = `${ROWS[ri].id}-${i}`;
-    down ? noteOn(id, ROWS[ri], i, !!shift) : noteOff(id);
-    return;
-  }
-  if (!down) { noteOff("any-" + code); return; }
-  if (!everyKey) return;
-  const row = ROWS[2];
-  const ns = notesFor(row);
-  let h = 0;
-  for (let i = 0; i < code.length; i++) h = Math.imul(h, 31) + code.charCodeAt(i);
-  noteOn("any-" + code, row, Math.abs(h) % ns.length, !!shift);
-};
-
-let helperES = null;
-let helperRetry = 0;
-let helperConnected = false;
-let helperFlashed = false;
-
-function setListenerStatus(text) {
-  const el = document.getElementById("listener-status");
-  if (el) el.textContent = text;
-}
-
-function onHelperConnected() {
-  helperConnected = true;
-  helperRetry = 0;
-  if (!keepAlive) {
-    keepAlive = true;
-    const ka = document.getElementById("keep-alive");
-    if (ka) ka.checked = true;
-    save();
-  }
-  if (ctx && ctx.state === "suspended") ctx.resume();
-  setListenerStatus("Menu-bar listener is routing keys into this KeySax. Leave this window open in the background.");
-  if (!helperFlashed) {
-    helperFlashed = true;
-    flash("Typing in other apps uses this KeySax");
-  }
-}
-
-function connectHelperKeys() {
-  if (isHelperHost) return;
-  if (helperES) return;
-  try {
-    helperES = new EventSource("http://127.0.0.1:18765/keys");
-  } catch (_) {
-    helperES = null;
-    scheduleHelperRetry();
-    return;
-  }
-  helperES.onopen = onHelperConnected;
-  helperES.onmessage = e => {
-    if (!helperConnected) onHelperConnected();
-    if (!e.data) return;
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg && msg.code) window.keysaxFromHelper(msg.code, !!msg.down, !!msg.shift);
-    } catch (_) {}
-  };
-  helperES.onerror = () => {
-    helperConnected = false;
-    if (helperES && helperES.readyState === EventSource.CLOSED) {
-      helperES = null;
-      scheduleHelperRetry();
-    }
-  };
-}
-
-function scheduleHelperRetry() {
-  const ms = Math.min(8000, 600 * Math.pow(1.5, helperRetry++));
-  setTimeout(connectHelperKeys, ms);
-}
-
-function pollListener() {
-  if (helperConnected) {
-    setListenerStatus("Menu-bar listener is routing keys into this KeySax. Leave this window open in the background.");
-    return;
-  }
-  fetch("http://127.0.0.1:18765/status", { cache: "no-store" })
-    .then(r => r.json())
-    .then(j => {
-      if (helperConnected) return;
-      setListenerStatus(j.ok
-        ? (j.tap === false
-          ? "Mac key listener needs Device Control and Data Access (and maybe Input Monitoring)."
-          : "Mac key listener is running. Type in other apps — the menu-bar saxophone plays the sounds.")
-        : "Mac key listener is off.");
-    })
-    .catch(() => {
-      if (!helperConnected) setListenerStatus("Mac key listener is off.");
-    });
-}
-connectHelperKeys();
-pollListener();
-setInterval(pollListener, 4000);
-
 window.addEventListener("appinstalled", () => {
   deferredInstall = null;
   showInstallHints();
@@ -1883,4 +1770,4 @@ document.addEventListener("visibilitychange", () => {
   if (keepAlive && ctx && ctx.state === "suspended") ctx.resume();
 });
 setInterval(() => { if (keepAlive && ctx && ctx.state === "suspended") ctx.resume(); }, 2500);
-if ("serviceWorker" in navigator && !isHelperHost) navigator.serviceWorker.register("./sw.js").catch(() => {});
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
