@@ -37,6 +37,8 @@ ABC / QWERTY. Each row has its own sound, octave, and transpose. Symbols play to
 
 Settings (scale, root, engine, appearance, MIDI, row sounds) are stored in the browser on this device.
 
+On a Mac, **KeySax Keys** (menu-bar saxophone) only listens. Leave the installed KeySax open in the background and typing in other apps uses these same settings.
+
 ## License
 
 Original code and procedurally generated tones.
