@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#0f0a09">
+  <meta name="theme-color" content="#0f0b0a">
   <title>KeySax</title>
   <link rel="icon" href="icon.png">
   <link rel="apple-touch-icon" href="icon-512.png">
@@ -16,36 +16,157 @@
     <button type="button" id="start">Tap to play KeySax</button>
   </div>
 
-  <header>
-    <img src="icon.png" alt="">
-    <div>
-      <h1>KeySax</h1>
-      <p id="status">Phone, tablet, or keyboard. No account.</p>
-    </div>
-    <div class="grow"></div>
-    <div class="tools">
-      <button class="chip" id="sustain" type="button">Sustain</button>
-      <button class="chip" id="record" type="button">Record</button>
-    </div>
-  </header>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <img src="icon.png" width="26" height="26" alt="">
+        <div>
+          <h1>KeySax</h1>
+          <p id="status">Press 1–0 to play</p>
+        </div>
+      </div>
+      <canvas id="wave" class="wave" width="160" height="28" aria-label="Live spectrum"></canvas>
+      <button class="glass-icon" id="help" type="button" title="Play guide" aria-label="Play guide">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.8 7.6c.2-1.4 1.3-2.2 2.5-2.2 1.3 0 2.3.8 2.3 2.1 0 1.1-.7 1.6-1.6 2.2-.8.5-1.1 1-.1 1.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="14.4" r="1" fill="currentColor"/></svg>
+      </button>
+      <button class="glass-icon" id="settings" type="button" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h14M5.5 10h9M7.5 13.5h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </button>
+    </header>
 
-  <div id="rows"></div>
-  <div class="row">
-    <div class="row-bar"><h2>SPACE</h2><span style="color:var(--muted);font-size:12px">Bass thump</span></div>
-    <button class="pad space" id="space" type="button" data-space="1"><small>space</small><b>Thump</b></button>
+    <main class="board">
+      <div id="rows"></div>
+      <section class="row">
+        <div class="row-bar">
+          <h2>SPACE</h2>
+          <span class="voice-static">Space Thump</span>
+        </div>
+        <button class="pad space" id="space" type="button" style="--accent:#6b5cc7">
+          <small>space</small>
+          <b id="space-note">C1</b>
+        </button>
+      </section>
+    </main>
+
+    <footer class="bottombar">
+      <div class="glass cluster">
+        <button class="mini" id="oct-down" type="button" title="Octave down (↓)" aria-label="Octave down">
+          <svg viewBox="0 0 16 16"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="oct-read">
+          <span>OCT</span>
+          <b id="oct-global">4</b>
+        </div>
+        <button class="mini" id="oct-up" type="button" title="Octave up (↑)" aria-label="Octave up">
+          <svg viewBox="0 0 16 16"><path d="M3 10l5-5 5 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+
+      <div class="glass cluster" title="Transpose">
+        <button class="mini" id="tr-down" type="button" aria-label="Transpose down">
+          <svg viewBox="0 0 16 16"><path d="M3.5 8h9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+        <b id="tr-global" class="tr-read">0</b>
+        <button class="mini" id="tr-up" type="button" aria-label="Transpose up">
+          <svg viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <div class="glass cluster vol">
+        <svg class="speaker" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 7.2h2.2L9 4.2v9.6L5.2 10.8H3z" fill="currentColor"/><path d="M11.2 6.4c.9.7 1.4 1.7 1.4 2.6s-.5 1.9-1.4 2.6M13.2 4.8c1.5 1.2 2.3 2.8 2.3 4.2s-.8 3-2.3 4.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <input id="volume" type="range" min="0" max="1" step="0.01" value="0.85" aria-label="Volume">
+      </div>
+
+      <label class="glass cluster sustain" title="Tab">
+        <span>Sustain</span>
+        <input id="sustain" type="checkbox" role="switch">
+      </label>
+
+      <div class="grow"></div>
+
+      <div class="tool-row">
+        <button class="glass-icon on" id="letter-video" type="button" title="Letter video on — letters drop, sentence forms" aria-label="Letter video">
+          <svg viewBox="0 0 18 18"><text x="9" y="13" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui" fill="currentColor">Aa</text></svg>
+        </button>
+        <button class="glass-icon rec-btn" id="record" type="button" title="Record letter video" aria-label="Record">
+          <svg class="ico-rec" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="9" r="3.1" fill="#c43c32"/></svg>
+          <svg class="ico-stop" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="#c43c32"/><rect x="6.2" y="6.2" width="5.6" height="5.6" rx="1" fill="white"/></svg>
+        </button>
+        <button class="glass-icon" id="solo" type="button" title="Random sax solo" aria-label="Random sax solo">
+          <svg viewBox="0 0 18 18"><path d="M9 2.5l.7 3.2L13 6.4l-2.6 2 0.8 3.3L9 10.2 6.8 11.7l.8-3.3-2.6-2 3.3-.7zM14.2 10.2l.4 1.6 1.6.4-1.6.4-.4 1.6-.4-1.6-1.6-.4 1.6-.4zM3.8 4.4l.3 1.2 1.2.3-1.2.3-.3 1.2-.3-1.2-1.2-.3 1.2-.3z" fill="currentColor"/></svg>
+        </button>
+        <button class="glass-icon" id="midi" type="button" title="MIDI out" aria-label="MIDI out">
+          <svg viewBox="0 0 18 18"><rect x="2.2" y="5" width="13.6" height="8.5" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 5v5.2M7.5 5v5.2M10.5 5v5.2M13 5v5.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </footer>
   </div>
 
   <canvas id="stage" class="stage" aria-hidden="true"></canvas>
-  <canvas id="tape" class="tape" width="720" height="720" hidden aria-hidden="true"></canvas>
+  <canvas id="tape" class="tape" width="720" height="720" aria-hidden="true"></canvas>
+
+  <div class="modal" id="help-sheet" hidden>
+    <div class="sheet">
+      <h3>Four rows, pick a sound for each</h3>
+      <div class="help-grid">
+        <span class="keychip">1 – 0</span><span>Number row</span>
+        <span class="keychip">Q W E R T Y U I O P</span><span>QWERTY row</span>
+        <span class="keychip">A S D F G H J K L ;</span><span>Home row</span>
+        <span class="keychip">Z X C V B N M , . /</span><span>Bottom row</span>
+        <span class="keychip">Space</span><span>Bass thump</span>
+        <span class="keychip">Drums</span><span>Pick Drums on any row</span>
+        <span class="keychip">` - = [ ] \ ; '</span><span>Symbols also play</span>
+        <span class="keychip">Shift + key</span><span>Uppercase / ! @ # in the video</span>
+        <span class="keychip">OCT / TR</span><span>Octave and transpose per row</span>
+        <span class="keychip">Record</span><span>Letters drop, sentence forms, clip is ready on stop</span>
+        <span class="keychip">↑ / ↓</span><span>Octave</span>
+        <span class="keychip">Tab</span><span>Sustain</span>
+        <span class="keychip">Esc</span><span>All notes off</span>
+      </div>
+      <p class="fine">Each row has its own menu — Alto Sax, piano, guitar, kalimba, glass, chimes, and more. ABC / QWERTY layout.</p>
+      <div class="sheet-actions"><button class="glass-btn" id="help-close" type="button">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="settings-sheet" hidden>
+    <div class="sheet">
+      <h3>Settings</h3>
+      <label class="field">Appearance
+        <select id="appearance">
+          <option value="system">System</option>
+          <option value="dark" selected>Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </label>
+      <label class="field">Scale
+        <select id="scale">
+          <option value="youtube" selected>YouTube</option>
+          <option value="major">Major</option>
+          <option value="minor">Natural Minor</option>
+          <option value="pentatonicMajor">Major Pentatonic</option>
+          <option value="pentatonicMinor">Minor Pentatonic</option>
+          <option value="blues">Blues</option>
+          <option value="mixolydian">Mixolydian</option>
+          <option value="dorian">Dorian</option>
+          <option value="chromatic">Chromatic</option>
+        </select>
+      </label>
+      <label class="field">Root
+        <select id="root"></select>
+      </label>
+      <p class="fine">KeySax generates every sound in this browser. No samples were licensed, no account, nothing is uploaded.</p>
+      <div class="sheet-actions"><button class="glass-btn" id="settings-close" type="button">Close</button></div>
+    </div>
+  </div>
 
   <div class="modal" id="export" hidden>
-    <div class="sheet">
+    <div class="sheet export-sheet">
       <h3>Download</h3>
       <p id="sentence-preview"></p>
-      <button class="choice" data-export="clipAudio"><b>Video + audio</b><span>Letters dropping, sentence forming, with sound</span></button>
-      <button class="choice" data-export="clipVideo"><b>Video only</b><span>The same clip, silent</span></button>
-      <button class="choice" data-export="audioOnly"><b>Audio only</b><span>WAV recording</span></button>
-      <button class="chip" id="export-cancel" type="button">Cancel</button>
+      <button class="choice" data-export="clipAudio" type="button"><b>Video + audio</b><span>Letters dropping, sentence forming, with sound</span></button>
+      <button class="choice" data-export="clipVideo" type="button"><b>Video only</b><span>The same clip, silent</span></button>
+      <button class="choice" data-export="audioOnly" type="button"><b>Audio only (WAV)</b><span>Just the WAV recording</span></button>
+      <div class="sheet-actions"><button class="glass-btn" id="export-cancel" type="button">Cancel</button></div>
     </div>
   </div>
 
