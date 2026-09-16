@@ -9,7 +9,7 @@ struct RenderedNote {
 }
 
 final class SampleBank: @unchecked Sendable {
-    static let cacheVersion = "v8"
+    static let cacheVersion = "v9"
 
     private let lock = NSLock()
     private var banks: [String: [String: RenderedNote]] = [:]
@@ -100,9 +100,8 @@ final class SampleBank: @unchecked Sendable {
                 let split = LoopSplitter.split(
                     samples: samples,
                     sampleRate: Float(sr),
-                    attackTime: voice == .pad ? 0.28 : 0.22,
-                    loopCycles: 3,
-                    vibratoRate: voice.saxPreset?.vibratoRate ?? 5.2
+                    attackTime: voice == .pad ? 0.28 : 0.24,
+                    tailPad: 0.06
                 )
                 guard
                     let attack = DSP.makePCMBuffer(mono: split.attack, format: format),

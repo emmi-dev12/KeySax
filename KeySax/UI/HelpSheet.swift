@@ -2,11 +2,13 @@ import SwiftUI
 
 struct HelpSheet: View {
     var model: AppModel
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Four rows, pick a sound for each")
                 .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .foregroundStyle(KeySaxTheme.ink(scheme))
 
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                 row("1 – 0", "Number row")
@@ -28,17 +30,19 @@ struct HelpSheet: View {
 
             Text("Each row has its own menu — Alto Sax, piano, guitar, kalimba, glass, chimes, and more. ABC / QWERTY layout.")
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(KeySaxTheme.muted(scheme))
 
             HStack {
                 Spacer()
                 Button("Close") { model.showHelp = false }
-                    .buttonStyle(.glass)
+                    .buttonStyle(GlassCapsuleButtonStyle())
                     .keyboardShortcut(.cancelAction)
             }
         }
         .padding(24)
         .frame(width: 460)
+        .foregroundStyle(KeySaxTheme.ink(scheme))
+        .background(KeySaxTheme.sheetFill)
     }
 
     private func row(_ keys: String, _ meaning: String) -> some View {
@@ -47,23 +51,26 @@ struct HelpSheet: View {
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .background(KeySaxTheme.glassFill(scheme), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             Text(meaning)
+                .foregroundStyle(KeySaxTheme.ink(scheme))
         }
     }
 }
 
 struct ExportSheet: View {
     var model: AppModel
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Download")
                 .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .foregroundStyle(KeySaxTheme.ink(scheme))
             if let sentence = model.pendingTake?.sentence, !sentence.trimmingCharacters(in: .whitespaces).isEmpty {
                 Text(sentence)
                     .font(.system(size: 15, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(KeySaxTheme.muted(scheme))
                     .textSelection(.enabled)
             }
             VStack(spacing: 8) {
@@ -74,13 +81,14 @@ struct ExportSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(kind.title)
                                 .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(KeySaxTheme.ink(scheme))
                             Text(kind.detail)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(KeySaxTheme.muted(scheme))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(KeySaxTheme.glassFill(scheme), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
@@ -88,11 +96,12 @@ struct ExportSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") { model.showExportSheet = false }
-                    .buttonStyle(.glass)
+                    .buttonStyle(GlassCapsuleButtonStyle())
             }
         }
         .padding(24)
         .frame(width: 420)
+        .background(KeySaxTheme.sheetFill)
     }
 }
 
@@ -100,6 +109,7 @@ struct PreparingView: View {
     var progress: Double
     var status: String
     var accent: Color
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 12) {
@@ -108,11 +118,19 @@ struct PreparingView: View {
                 .frame(width: 240)
             Text(status == "Letter frames" ? "Cutting letter frames" : "Voicing the instruments")
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(KeySaxTheme.ink(scheme))
             Text(status)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(KeySaxTheme.muted(scheme))
         }
         .padding(28)
-        .glassEffect(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(KeySaxTheme.glassFill(scheme))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(KeySaxTheme.glassStroke(scheme), lineWidth: 1)
+                )
+        }
     }
 }

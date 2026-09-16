@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import Accelerate
 import CoreAudio
+import AudioToolbox
 
 final class SaxAudioEngine: @unchecked Sendable {
     static let voiceCount = 32
@@ -9,6 +10,7 @@ final class SaxAudioEngine: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let master = AVAudioMixerNode()
     private let recordMixer = AVAudioMixerNode()
+    private let glue: AVAudioUnitEffect
     private var voices: [Voice] = []
     private let lock = NSLock()
     private let fadeQueue = DispatchQueue(label: "com.keysax.fade", qos: .userInteractive)
@@ -44,15 +46,29 @@ final class SaxAudioEngine: @unchecked Sendable {
         bank = SampleBank(format: format)
         recorder = Recorder(format: format)
 
+        let compressorDesc = AudioComponentDescription(
+            componentType: kAudioUnitType_Effect,
+            componentSubType: kAudioUnitSubType_DynamicsProcessor,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        )
+        glue = AVAudioUnitEffect(audioComponentDescription: compressorDesc)
+
         engine.attach(master)
         engine.attach(recordMixer)
+        engine.attach(glue)
         do {
-            try engine.connectNode(recordMixer, to: master, format: format)
+            try engine.connectNode(recordMixer, to: glue, format: format)
+            try engine.connectNode(glue, to: master, format: format)
             try engine.connectNode(master, to: engine.mainMixerNode, format: format)
         } catch {
             assertionFailure("KeySax audio graph failed: \(error)")
         }
         engine.mainMixerNode.outputVolume = 1
+        glue.withAudioUnit { au in
+            Self.tuneCompressor(au)
+        }
 
         for _ in 0..<Self.voiceCount {
             let voice = Voice()
@@ -253,6 +269,15 @@ final class SaxAudioEngine: @unchecked Sendable {
         } catch {
             assertionFailure("KeySax meter tap failed: \(error)")
         }
+    }
+
+    private static func tuneCompressor(_ au: AudioUnit) {
+        AudioUnitSetParameter(au, kDynamicsProcessorParam_Threshold, kAudioUnitScope_Global, 0, -16, 0)
+        AudioUnitSetParameter(au, kDynamicsProcessorParam_HeadRoom, kAudioUnitScope_Global, 0, 6, 0)
+        AudioUnitSetParameter(au, kDynamicsProcessorParam_ExpansionRatio, kAudioUnitScope_Global, 0, 1, 0)
+        AudioUnitSetParameter(au, kDynamicsProcessorParam_AttackTime, kAudioUnitScope_Global, 0, 0.004, 0)
+        AudioUnitSetParameter(au, kDynamicsProcessorParam_ReleaseTime, kAudioUnitScope_Global, 0, 0.12, 0)
+        AudioUnitSetParameter(au, kDynamicsProcessorParam_OverallGain, kAudioUnitScope_Global, 0, 2.5, 0)
     }
 
     private func tuneLatency() {

@@ -14,6 +14,9 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
+            WindowPaint(dark: scheme == .dark)
+                .frame(width: 0, height: 0)
+
             KeySaxTheme.stageGradient(scheme: scheme)
                 .ignoresSafeArea()
 
@@ -24,6 +27,7 @@ struct ContentView: View {
                 Spacer(minLength: 12)
                 BottomBar(model: model)
             }
+            .foregroundStyle(KeySaxTheme.ink(scheme))
 
             LetterRainOverlay(model: model)
 
@@ -107,7 +111,7 @@ struct LetterRainOverlay: View {
                         if !model.liveSentence.isEmpty {
                             Text(model.liveSentence)
                                 .font(.system(size: sentenceSize(model.liveSentence.count), weight: .semibold, design: .rounded))
-                                .foregroundStyle(Color.white.opacity(0.94))
+                                .foregroundStyle(KeySaxTheme.ivory.opacity(0.94))
                                 .multilineTextAlignment(.center)
                                 .shadow(color: .black.opacity(0.55), radius: 10, y: 2)
                                 .padding(.horizontal, 36)

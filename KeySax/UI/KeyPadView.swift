@@ -18,6 +18,7 @@ struct InstrumentBoard: View {
 struct RowStrip: View {
     var model: AppModel
     var row: KeyboardRow
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let voice = model.settings.voice(for: row)
@@ -29,7 +30,7 @@ struct RowStrip: View {
                 Text(row.title)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .tracking(1.6)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(KeySaxTheme.muted(scheme))
                     .frame(width: 72, alignment: .leading)
                 VoiceMenu(model: model, row: row)
                 if model.loadingVoice.contains(voice) {
@@ -74,12 +75,13 @@ struct RowStepper: View {
     var text: String
     var down: () -> Void
     var up: () -> Void
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 4) {
             Text(label)
                 .font(.system(size: 9, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(KeySaxTheme.muted(scheme))
             Button(action: down) { Image(systemName: "minus") }
             Text(text)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
@@ -95,6 +97,7 @@ struct RowStepper: View {
 struct VoiceMenu: View {
     var model: AppModel
     var row: KeyboardRow
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let current = model.settings.voice(for: row)
@@ -123,11 +126,11 @@ struct VoiceMenu: View {
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(KeySaxTheme.muted(scheme))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(.quaternary, in: Capsule())
+            .background(KeySaxTheme.glassFill(scheme), in: Capsule())
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -143,16 +146,17 @@ struct RoundPad: View {
     var enabled: Bool
     var onDown: () -> Void
     var onUp: () -> Void
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Button(action: {}) {
             VStack(spacing: 3) {
                 Text(glyph)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(pressed ? .white.opacity(0.9) : .secondary)
+                    .foregroundStyle(pressed ? Color.white.opacity(0.9) : KeySaxTheme.muted(scheme))
                 Text(note)
                     .font(.system(size: 15, weight: .semibold, design: .serif))
-                    .foregroundStyle(pressed ? .white : Color.primary.opacity(0.9))
+                    .foregroundStyle(pressed ? Color.white : KeySaxTheme.ink(scheme).opacity(0.92))
             }
             .frame(maxWidth: .infinity)
             .frame(height: 58)
@@ -181,6 +185,7 @@ struct RoundPad: View {
 
 struct SpaceBarPad: View {
     var model: AppModel
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let ready = model.audio.isReady(.thump)
@@ -189,11 +194,11 @@ struct SpaceBarPad: View {
                 Text("SPACE")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .tracking(1.6)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(KeySaxTheme.muted(scheme))
                     .frame(width: 72, alignment: .leading)
                 Text("Space Thump")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(KeySaxTheme.muted(scheme))
                 if model.loadingVoice.contains(.thump) {
                     ProgressView().controlSize(.mini)
                 }
@@ -205,10 +210,10 @@ struct SpaceBarPad: View {
                     VStack(spacing: 2) {
                         Text("space")
                             .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(model.spacePressed ? .white.opacity(0.9) : .secondary)
+                            .foregroundStyle(model.spacePressed ? Color.white.opacity(0.9) : KeySaxTheme.muted(scheme))
                         Text(Pitch.displayName(midi: model.spaceMIDI))
                             .font(.system(size: 15, weight: .semibold, design: .serif))
-                            .foregroundStyle(model.spacePressed ? .white : Color.primary.opacity(0.9))
+                            .foregroundStyle(model.spacePressed ? Color.white : KeySaxTheme.ink(scheme).opacity(0.92))
                     }
                     Spacer()
                 }

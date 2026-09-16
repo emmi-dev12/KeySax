@@ -3,6 +3,7 @@ import AppKit
 
 struct TopBar: View {
     var model: AppModel
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 12) {
@@ -14,9 +15,10 @@ struct TopBar: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("KeySax")
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(KeySaxTheme.ink(scheme))
                     Text(model.statusLine)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(KeySaxTheme.muted(scheme))
                         .lineLimit(1)
                 }
             }
@@ -36,7 +38,7 @@ struct TopBar: View {
             } label: {
                 Image(systemName: "questionmark")
             }
-            .buttonStyle(.glass)
+            .buttonStyle(GlassIconButtonStyle())
             .help("Play guide")
 
             Button {
@@ -44,7 +46,7 @@ struct TopBar: View {
             } label: {
                 Image(systemName: "slider.horizontal.3")
             }
-            .buttonStyle(.glass)
+            .buttonStyle(GlassIconButtonStyle())
             .help("Settings")
         }
         .padding(.horizontal, 22)
@@ -54,6 +56,7 @@ struct TopBar: View {
 
 struct BottomBar: View {
     var model: AppModel
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 10) {
@@ -68,7 +71,7 @@ struct BottomBar: View {
                     VStack(spacing: 0) {
                         Text("OCT")
                             .font(.system(size: 9, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(KeySaxTheme.muted(scheme))
                         Text("\(model.settings.octave)")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .monospacedDigit()
@@ -81,7 +84,7 @@ struct BottomBar: View {
                     }
                     .help("Octave up (↑)")
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(.plain)
             }
 
             GlassSurface {
@@ -101,8 +104,8 @@ struct BottomBar: View {
                         Image(systemName: "plus")
                     }
                 }
-                .buttonStyle(.glass)
-                .help("Transpose  ( [  ] )")
+                .buttonStyle(.plain)
+                .help("Transpose")
             }
 
             GlassSurface {
@@ -112,6 +115,7 @@ struct BottomBar: View {
                         .font(.system(size: 12))
                     Slider(value: volumeBinding, in: 0...1)
                         .controlSize(.small)
+                        .tint(KeySaxTheme.brass)
                         .frame(width: 110)
                 }
             }
@@ -123,6 +127,7 @@ struct BottomBar: View {
                 }
                 .toggleStyle(.switch)
                 .controlSize(.mini)
+                .tint(Color(red: 0.20, green: 0.78, blue: 0.35))
             }
             .help("Tab")
 
@@ -141,7 +146,7 @@ struct BottomBar: View {
                     model.settings.letterVideo.toggle()
                     model.settings.persist()
                 } label: {
-                    Image(systemName: model.settings.letterVideo ? "textformat" : "textformat")
+                    Image(systemName: "textformat")
                 }
                 .opacity(model.settings.letterVideo ? 1 : 0.4)
                 .help(model.settings.letterVideo ? "Letter video on — letters drop, sentence forms" : "Letter video off")
@@ -149,9 +154,9 @@ struct BottomBar: View {
                 Button {
                     model.toggleRecord()
                 } label: {
-                    Image(systemName: model.isRecording ? "stop.circle.fill" : (model.settings.letterVideo ? "record.circle" : "record.circle"))
+                    Image(systemName: model.isRecording ? "stop.circle.fill" : "record.circle")
                 }
-                .tint(model.isRecording ? .red : nil)
+                .foregroundStyle(model.isRecording ? Color(red: 0.77, green: 0.24, blue: 0.20) : KeySaxTheme.ink(scheme))
                 .help(model.isRecording ? timeString : (model.settings.letterVideo ? "Record letter video" : "Record WAV"))
 
                 Button {
@@ -159,6 +164,7 @@ struct BottomBar: View {
                 } label: {
                     Image(systemName: "sparkles")
                 }
+                .foregroundStyle(model.solo.isPlaying ? KeySaxTheme.brass : KeySaxTheme.ink(scheme))
                 .help("Random sax solo")
 
                 Button {
@@ -169,7 +175,7 @@ struct BottomBar: View {
                 .opacity(model.settings.midiEnabled ? 1 : 0.55)
                 .help("MIDI out")
             }
-            .buttonStyle(.glass)
+            .buttonStyle(GlassIconButtonStyle())
         }
         .padding(.horizontal, 22)
         .padding(.bottom, 14)

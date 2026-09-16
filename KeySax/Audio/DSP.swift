@@ -313,26 +313,37 @@ struct SplitNote {
 }
 
 enum LoopSplitter {
-    static func split(samples: [Float], sampleRate: Float, attackTime: Float, loopCycles: Int, vibratoRate: Float) -> SplitNote {
-        let attackEnd = min(samples.count - 64, max(64, Int(attackTime * sampleRate)))
+    /// Long interior loop, matching the web player: hold the body of the
+    /// note instead of a short vibrato-cycle splice.
+    static func split(
+        samples: [Float],
+        sampleRate: Float,
+        attackTime: Float,
+        tailPad: Float = 0.06,
+        loopCycles: Int = 0,
+        vibratoRate: Float = 5
+    ) -> SplitNote {
+        let n = samples.count
+        let attackEnd = min(n - 256, max(64, Int(attackTime * sampleRate)))
         var loopStart = attackEnd
-        let search = min(400, samples.count - attackEnd - 8)
+        let search = min(400, n - attackEnd - 8)
         for i in 0..<search {
             let idx = attackEnd + i
-            if idx + 1 < samples.count, samples[idx] >= 0, samples[idx + 1] < 0 {
+            if idx + 1 < n, samples[idx] >= 0, samples[idx + 1] < 0 {
                 loopStart = idx + 1
                 break
             }
         }
-        let cycle = max(256, Int(sampleRate / max(vibratoRate, 3)))
-        var loopLen = cycle * max(1, loopCycles)
-        if loopStart + loopLen >= samples.count {
-            loopLen = samples.count - loopStart - 1
+        let tail = max(loopStart + 128, n - max(8, Int(tailPad * sampleRate)))
+        let loopEnd = min(n, tail)
+        guard loopEnd > loopStart + 64 else {
+            return SplitNote(attack: samples, loop: Array(samples.suffix(min(128, n))))
         }
-        loopLen = max(128, loopLen)
-        var loop = Array(samples[loopStart..<(loopStart + loopLen)])
-        crossfadeLoop(&loop, fade: min(64, loop.count / 8))
+        var loop = Array(samples[loopStart..<loopEnd])
+        crossfadeLoop(&loop, fade: min(512, loop.count / 10))
         let attack = Array(samples[0..<loopStart])
+        _ = loopCycles
+        _ = vibratoRate
         return SplitNote(attack: attack, loop: loop)
     }
 
