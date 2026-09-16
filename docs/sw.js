@@ -1,12 +1,12 @@
 self.addEventListener("install", e => {
   self.skipWaiting();
-  e.waitUntil(caches.open("keysax-v7").then(c => c.addAll([
+  e.waitUntil(caches.open("keysax-v8").then(c => c.addAll([
     "./", "./index.html", "./styles.css", "./app.js", "./manifest.json", "./icon.png", "./icon-512.png"
   ])));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== "keysax-v7").map(k => caches.delete(k))))
+    caches.keys().then(keys => Promise.all(keys.filter(k => k !== "keysax-v8").map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

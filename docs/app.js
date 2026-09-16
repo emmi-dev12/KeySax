@@ -48,13 +48,15 @@ function typedChar(label, shift) {
   return SHIFT[label] || label.toUpperCase();
 }
 
-let ctx, master, recDest, recChunks, recProc, recMedia, recording = false, sustain = false;
+let ctx, master, recDest, recChunks, recProc, recording = false, sustain = false;
 const live = new Map();
 const bank = new Map();
 let recStart = 0;
 let pending = null;
-let recBits = [];
-let recMime = "";
+let letterCap = null;
+let filmCap = null;
+let everyKey = false;
+let keepAlive = false;
 let analyser, wave, waveG;
 let letterVideo = true;
 let midiEnabled = false;
@@ -74,7 +76,7 @@ const STORE = "keysax-pwa-v1";
 
 const drops = [];
 let sentence = "";
-let stage, tape, stageG, tapeG;
+let stage, tape, film, stageG, tapeG, filmG;
 let raf = 0;
 
 function midiToHz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
@@ -731,6 +733,7 @@ function unlock() {
   analyser.smoothingTimeConstant = 0.72;
   comp.connect(analyser);
   master.gain.value = volume;
+  ctx.onstatechange = () => { if (keepAlive && ctx.state === "suspended") ctx.resume(); };
   const scaleTitle = document.getElementById("scale")?.selectedOptions[0]?.textContent || "YouTube";
   document.getElementById("status").textContent = "Four rows · " + scaleTitle;
   if (!stageStarted) startStage();
@@ -853,7 +856,8 @@ function resizeStage() {
 function tick() {
   const now = performance.now();
   if (stageG) drawScene(stageG, stage.width, stage.height, now, false);
-  if (tapeG) drawScene(tapeG, tape.width, tape.height, now, true);
+  if (tapeG && recording) drawScene(tapeG, tape.width, tape.height, now, true);
+  if (filmG && recording) drawApp(filmG, film.width, film.height, now);
   drawWave();
   while (drops.length && drops[0].end != null && now - drops[0].end > 1200) drops.shift();
   raf = requestAnimationFrame(tick);
@@ -903,12 +907,92 @@ function drawWave() {
 }
 
 let stageStarted = false;
+function hexFill(hex, a) {
+  const n = parseInt((hex || "#dcb359").replace("#", ""), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function fillRound(g, x, y, w, h, r) {
+  g.beginPath();
+  if (g.roundRect) g.roundRect(x, y, w, h, r);
+  else g.rect(x, y, w, h);
+  g.fill();
+}
+
+function drawApp(g, W, H, now) {
+  const grd = g.createRadialGradient(W * 0.5, H * 0.42, 40, W * 0.5, H * 0.42, Math.max(W, H) * 0.72);
+  grd.addColorStop(0, "#291a12");
+  grd.addColorStop(1, "#0f0b0a");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, W, H);
+  g.textBaseline = "middle";
+  g.fillStyle = "#f4ece2";
+  g.font = `600 ${Math.round(H * 0.032)}px "SF Pro Rounded",system-ui,sans-serif`;
+  g.textAlign = "left";
+  g.fillText("KeySax", W * 0.04, H * 0.055);
+  g.fillStyle = "rgba(244,236,226,0.55)";
+  g.font = `500 ${Math.round(H * 0.02)}px "SF Pro Rounded",system-ui,sans-serif`;
+  g.fillText(document.getElementById("status")?.textContent || "", W * 0.04, H * 0.09);
+
+  const marginX = W * 0.04;
+  const top = H * 0.13;
+  const area = H * 0.7;
+  const rowH = area / 5;
+  ROWS.forEach((row, ri) => {
+    const y0 = top + ri * rowH;
+    const v = voiceById(row.voice);
+    const ns = notesFor(row);
+    g.fillStyle = "rgba(244,236,226,0.5)";
+    g.font = `600 ${Math.round(H * 0.018)}px "SF Pro Rounded",system-ui,sans-serif`;
+    g.textAlign = "left";
+    g.fillText(row.title, marginX, y0 + rowH * 0.12);
+    g.textAlign = "right";
+    g.fillText(v.title, W - marginX, y0 + rowH * 0.12);
+    const padsY = y0 + rowH * 0.26;
+    const padsH = rowH * 0.62;
+    const gap = Math.max(6, W * 0.006);
+    const padsW = W - marginX * 2;
+    const pw = (padsW - gap * (ns.length - 1)) / ns.length;
+    ns.forEach((n, i) => {
+      const x = marginX + i * (pw + gap);
+      const on = live.has(`${row.id}-${i}`);
+      g.fillStyle = on ? v.accent : hexFill(v.accent, 0.2);
+      fillRound(g, x, padsY, pw, padsH, Math.min(14, padsH * 0.22));
+      g.strokeStyle = hexFill(v.accent, on ? 0.9 : 0.35);
+      g.lineWidth = 1;
+      g.beginPath();
+      if (g.roundRect) g.roundRect(x, padsY, pw, padsH, Math.min(14, padsH * 0.22));
+      g.stroke();
+      g.fillStyle = on ? "#fff" : "rgba(244,236,226,0.55)";
+      g.textAlign = "center";
+      g.font = `700 ${Math.round(padsH * 0.2)}px "SF Pro Rounded",system-ui,sans-serif`;
+      g.fillText(n.label, x + pw / 2, padsY + padsH * 0.34);
+      g.fillStyle = on ? "#fff" : "rgba(244,236,226,0.92)";
+      g.font = `600 ${Math.round(padsH * 0.26)}px "Iowan Old Style",Palatino,serif`;
+      g.fillText(n.caption, x + pw / 2, padsY + padsH * 0.68);
+    });
+  });
+  const spaceY = top + 4 * rowH + rowH * 0.26;
+  const spaceH = rowH * 0.5;
+  const onSpace = live.has("space");
+  g.fillStyle = onSpace ? "#6b5cc7" : "rgba(107,92,199,0.22)";
+  fillRound(g, marginX, spaceY, W - marginX * 2, spaceH, 16);
+  g.fillStyle = onSpace ? "#fff" : "rgba(244,236,226,0.9)";
+  g.textAlign = "center";
+  g.font = `700 ${Math.round(spaceH * 0.28)}px "SF Pro Rounded",system-ui,sans-serif`;
+  g.fillText("space  " + noteName(spaceMIDI()), W / 2, spaceY + spaceH / 2);
+
+  drawScene(g, W, H, now, false);
+}
+
 function startStage() {
   stage = document.getElementById("stage");
   tape = document.getElementById("tape");
+  film = document.getElementById("film");
   wave = document.getElementById("wave");
   stageG = stage.getContext("2d");
-  tapeG = tape.getContext("2d");
+  tapeG = tape.getContext("2d", { alpha: false });
+  filmG = film.getContext("2d", { alpha: false });
   waveG = wave.getContext("2d");
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   wave.width = Math.floor(160 * dpr);
@@ -1092,87 +1176,146 @@ function startWavTap() {
   }
 }
 
-function startRec() {
+function captureCanvas(canvas, withAudio) {
+  if (typeof MediaRecorder === "undefined") return null;
+  const grab = canvas.captureStream || canvas.mozCaptureStream;
+  if (!grab) return null;
+  let vStream;
+  try { vStream = grab.call(canvas, 30); } catch (_) { return null; }
+  const videoTracks = vStream.getVideoTracks();
+  if (!videoTracks.length) return null;
+  const tracks = [...videoTracks];
+  if (withAudio && recDest) recDest.stream.getAudioTracks().forEach(t => tracks.push(t));
+  const mixed = new MediaStream(tracks);
+  const mimes = withAudio
+    ? ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4", "video/webm;codecs=vp9,opus"]
+    : ["video/webm;codecs=vp8", "video/webm", "video/mp4"];
+  const mime = pickMime(mimes);
+  const chunks = [];
+  let rec = null;
+  const tryStart = stream => {
+    const opts = mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : { videoBitsPerSecond: 8_000_000 };
+    rec = new MediaRecorder(stream, opts);
+  };
+  try {
+    tryStart(mixed);
+  } catch (_) {
+    try { tryStart(vStream); } catch (err) { return null; }
+  }
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.onerror = () => {};
+  try { rec.start(100); } catch (_) { return null; }
+  return { rec, chunks, mime: rec.mimeType || mime || "video/webm" };
+}
+
+function stopCapture(cap) {
+  return new Promise(resolve => {
+    if (!cap || !cap.rec || cap.rec.state === "inactive") {
+      resolve(cap && cap.chunks.length ? new Blob(cap.chunks, { type: cap.mime }) : null);
+      return;
+    }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      const blob = cap.chunks.length ? new Blob(cap.chunks, { type: cap.mime }) : null;
+      resolve(blob && blob.size > 400 ? blob : null);
+    };
+    cap.rec.onstop = finish;
+    try { cap.rec.requestData(); } catch (_) {}
+    try { cap.rec.stop(); } catch (_) { finish(); }
+    setTimeout(finish, 2500);
+  });
+}
+
+async function startRec() {
+  if (!ctx) unlock();
   recording = true;
+  pending = null;
   drops.length = 0;
   sentence = "";
   recChunks = [];
-  recBits = [];
+  letterCap = null;
+  filmCap = null;
   recStart = ctx.currentTime;
-  recMime = "";
-  recMedia = null;
   startWavTap();
   document.body.classList.add("filming");
   document.getElementById("record").classList.add("rec");
   document.getElementById("record").title = "Stop";
-  document.getElementById("status").textContent = "Recording — letters drop, sentence forms";
-  drawScene(tapeG, tape.width, tape.height, performance.now(), true);
-  const mime = pickMime([
-    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-    "video/mp4",
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm"
-  ]);
-  try {
-    if (letterVideo && typeof tape.captureStream === "function") {
-      const vStream = tape.captureStream(30);
-      const tracks = [...vStream.getVideoTracks(), ...(recDest?.stream.getAudioTracks() || [])];
-      const mixed = new MediaStream(tracks);
-      const opts = mime ? { mimeType: mime, videoBitsPerSecond: 5_000_000 } : { videoBitsPerSecond: 5_000_000 };
-      recMedia = new MediaRecorder(mixed, opts);
-      recMime = recMedia.mimeType || mime || "video/webm";
-      recMedia.ondataavailable = e => { if (e.data && e.data.size) recBits.push(e.data); };
-      recMedia.start(200);
-    }
-  } catch (err) {
-    recMedia = null;
-    document.getElementById("status").textContent = "Recording audio — video unavailable here";
+  const monitors = document.getElementById("rec-monitors");
+  monitors.hidden = false;
+  const now = performance.now();
+  if (tapeG) drawScene(tapeG, tape.width, tape.height, now, true);
+  if (filmG) drawApp(filmG, film.width, film.height, now);
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  filmCap = captureCanvas(film, true);
+  if (letterVideo) letterCap = captureCanvas(tape, true);
+  if (!filmCap && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+    try {
+      const ds = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: false,
+        preferCurrentTab: true,
+        selfBrowserSurface: "include"
+      });
+      const tracks = [...ds.getVideoTracks(), ...(recDest ? recDest.stream.getAudioTracks() : [])];
+      const mime = pickMime(["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"]);
+      const chunks = [];
+      const rec = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : { videoBitsPerSecond: 8_000_000 });
+      rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.start(100);
+      filmCap = { rec, chunks, mime: rec.mimeType || mime || "video/webm", display: ds };
+    } catch (_) {}
   }
+  const gotVideo = !!(filmCap || letterCap);
+  document.getElementById("status").textContent = gotVideo
+    ? "Recording the app…"
+    : "Recording audio — video unavailable here";
 }
 
-function stopRec() {
+async function stopRec() {
   recording = false;
   document.body.classList.remove("filming");
   document.getElementById("record").classList.remove("rec");
-  document.getElementById("record").title = letterVideo ? "Record letter video" : "Record WAV";
-  const dur = Math.max(0.4, ctx.currentTime - recStart);
+  document.getElementById("record").title = "Record";
+  document.getElementById("status").textContent = "Finishing clip…";
   const wav = recChunks && recChunks.length ? wavFromFloat(recChunks, ctx.sampleRate) : null;
   try { recProc && recProc.disconnect(); } catch (_) {}
-  let finished = false;
-  const finish = videoBlob => {
-    if (finished) return;
-    finished = true;
-    pending = {
-      wav,
-      video: videoBlob && videoBlob.size > 800 ? videoBlob : null,
-      sentence,
-      dur,
-      mime: recMime
-    };
-    document.getElementById("sentence-preview").textContent = pending.sentence || "(no letters)";
-    const hasVideo = !!pending.video;
-    document.querySelector('[data-export="clipAudio"]').hidden = !hasVideo;
-    document.querySelector('[data-export="clipVideo"]').hidden = !hasVideo;
-    document.getElementById("export").hidden = false;
-    document.getElementById("status").textContent = hasVideo ? "Clip is ready." : "Audio is ready. Video isn’t supported in this browser.";
+  const [filmBlob, letterBlob] = await Promise.all([stopCapture(filmCap), stopCapture(letterCap)]);
+  try { filmCap?.display?.getTracks().forEach(t => t.stop()); } catch (_) {}
+  document.getElementById("rec-monitors").hidden = true;
+  pending = {
+    wav,
+    film: filmBlob,
+    video: letterBlob,
+    filmMime: filmCap?.mime || "",
+    mime: letterCap?.mime || filmCap?.mime || "video/webm",
+    sentence,
+    dur: Math.max(0.4, ctx.currentTime - recStart)
   };
-  if (recMedia && recMedia.state !== "inactive") {
-    recMedia.onstop = () => finish(new Blob(recBits, { type: recMime || "video/webm" }));
-    try { recMedia.requestData(); } catch (_) {}
-    recMedia.stop();
-    setTimeout(() => { if (!pending) finish(new Blob(recBits, { type: recMime || "video/webm" })); }, 1200);
-  } else {
-    finish(null);
-  }
+  letterCap = null;
+  filmCap = null;
+  document.getElementById("sentence-preview").textContent = pending.sentence || "(no letters)";
+  const hasFilm = !!pending.film;
+  const hasLetters = !!pending.video;
+  document.querySelector('[data-export="appAudio"]').hidden = !hasFilm;
+  document.querySelector('[data-export="appVideo"]').hidden = !hasFilm;
+  document.querySelector('[data-export="clipAudio"]').hidden = !hasLetters;
+  document.querySelector('[data-export="clipVideo"]').hidden = !hasLetters;
+  document.getElementById("export").hidden = false;
+  document.getElementById("status").textContent = (hasFilm || hasLetters) ? "Clip is ready." : "Audio is ready. Video didn’t capture in this browser.";
 }
 
 function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = name;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 4000);
 }
 
 function extFor(mime) {
@@ -1186,17 +1329,22 @@ function exportKind(kind) {
   if (!pending) return;
   if (kind === "audioOnly") {
     if (pending.wav) downloadBlob(pending.wav, "keysax.wav");
+    else flash("No audio in that take");
     return;
   }
-  if (!pending.video) {
-    if (pending.wav) downloadBlob(pending.wav, "keysax.wav");
+  if (kind === "appAudio" || kind === "appVideo") {
+    if (pending.film) downloadBlob(pending.film, "keysax-app." + extFor(pending.filmMime || pending.mime));
+    else if (pending.wav) { downloadBlob(pending.wav, "keysax.wav"); flash("No app video — saved WAV"); }
+    else flash("Nothing to download");
     return;
   }
-  const name = "keysax-letters." + extFor(pending.mime);
-  downloadBlob(pending.video, name);
-  if (kind === "clipAudio" && pending.wav) {
-    // Combined stream already has audio when the browser allowed it.
-    // WAV is a fallback if the clip is silent.
+  if (pending.video) {
+    downloadBlob(pending.video, "keysax-letters." + extFor(pending.mime));
+    return;
+  }
+  if (pending.wav) {
+    downloadBlob(pending.wav, "keysax.wav");
+    flash("No letter video — saved WAV");
   }
 }
 
@@ -1207,7 +1355,7 @@ function flash(text) {
 function prefsSnapshot() {
   return {
     appearance, scaleId, root, volume, sustain, letterVideo, midiEnabled, midiDestIndex,
-    globalOct, globalTr, engine,
+    globalOct, globalTr, engine, everyKey, keepAlive,
     rows: ROWS.map(r => ({ id: r.id, voice: r.voice, oct: r.oct, tr: r.tr }))
   };
 }
@@ -1235,6 +1383,8 @@ function load() {
     if (Number.isFinite(s.globalOct)) globalOct = Math.max(1, Math.min(7, s.globalOct | 0));
     if (Number.isFinite(s.globalTr)) globalTr = Math.max(-12, Math.min(12, s.globalTr | 0));
     if (s.engine === "additive" || s.engine === "reed") engine = s.engine;
+    if (typeof s.everyKey === "boolean") everyKey = s.everyKey;
+    if (typeof s.keepAlive === "boolean") keepAlive = s.keepAlive;
     if (Array.isArray(s.rows)) {
       s.rows.forEach(saved => {
         const row = ROWS.find(r => r.id === saved.id);
@@ -1260,6 +1410,10 @@ function applyForm() {
   document.getElementById("midi-enable").checked = midiEnabled;
   document.getElementById("engine-blurb").textContent = engine === "reed" ? "Physical-model waveguide" : "Additive harmonics + breath";
   document.getElementById("record").title = letterVideo ? "Record letter video" : "Record WAV";
+  const ek = document.getElementById("every-key");
+  const ka = document.getElementById("keep-alive");
+  if (ek) ek.checked = everyKey;
+  if (ka) ka.checked = keepAlive;
 }
 
 function fillRowSettings() {
@@ -1499,6 +1653,8 @@ document.getElementById("settings-close").onclick = () => closeSheet("settings-s
 document.getElementById("appearance").onchange = e => { appearance = e.target.value; applyAppearance(); save(); };
 document.getElementById("scale").onchange = e => { scaleId = e.target.value; render(); save(); flash("Four rows · " + e.target.selectedOptions[0].textContent); };
 document.getElementById("root").onchange = e => { root = Number(e.target.value); render(); save(); };
+document.getElementById("every-key").onchange = e => { everyKey = e.target.checked; save(); };
+document.getElementById("keep-alive").onchange = e => { keepAlive = e.target.checked; save(); if (keepAlive && ctx && ctx.state === "suspended") ctx.resume(); };
 document.getElementById("engine").onchange = e => {
   engine = e.target.value;
   document.getElementById("engine-blurb").textContent = engine === "reed" ? "Physical-model waveguide" : "Additive harmonics + breath";
@@ -1555,17 +1711,29 @@ window.addEventListener("keydown", e => {
   if (e.code === "ArrowUp") { bumpOctave(1); return; }
   if (e.code === "ArrowDown") { bumpOctave(-1); return; }
   const hit = lookup[e.code];
-  if (!hit) return;
-  e.preventDefault();
-  const [ri, i] = hit;
-  noteOn(`${ROWS[ri].id}-${i}`, ROWS[ri], i, e.shiftKey);
+  if (hit) {
+    e.preventDefault();
+    const [ri, i] = hit;
+    noteOn(`${ROWS[ri].id}-${i}`, ROWS[ri], i, e.shiftKey);
+    return;
+  }
+  if (everyKey && !e.metaKey && !e.ctrlKey && !/^Meta|Control|Alt|Shift/.test(e.key)) {
+    const row = ROWS[2];
+    const ns = notesFor(row);
+    let h = 0;
+    for (let i = 0; i < e.code.length; i++) h = Math.imul(h, 31) + e.code.charCodeAt(i);
+    noteOn("any-" + e.code, row, Math.abs(h) % ns.length, e.shiftKey);
+  }
 });
 window.addEventListener("keyup", e => {
   if (e.code === "Space") { spaceOff(); return; }
   const hit = lookup[e.code];
-  if (!hit) return;
-  const [ri, i] = hit;
-  noteOff(`${ROWS[ri].id}-${i}`);
+  if (hit) {
+    const [ri, i] = hit;
+    noteOff(`${ROWS[ri].id}-${i}`);
+    return;
+  }
+  noteOff("any-" + e.code);
 });
 window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyAppearance);
 window.addEventListener("beforeinstallprompt", e => {
@@ -1601,5 +1769,9 @@ if (midiEnabled) setMIDI(true);
   window.addEventListener(type, () => unlock(), { capture: true });
 });
 window.addEventListener("pagehide", save);
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") save(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") save();
+  if (keepAlive && ctx && ctx.state === "suspended") ctx.resume();
+});
+setInterval(() => { if (keepAlive && ctx && ctx.state === "suspended") ctx.resume(); }, 2500);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});

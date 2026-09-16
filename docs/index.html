@@ -108,7 +108,10 @@
   </div>
 
   <canvas id="stage" class="stage" aria-hidden="true"></canvas>
-  <canvas id="tape" class="tape" width="720" height="720" aria-hidden="true"></canvas>
+  <div class="rec-monitors" id="rec-monitors" hidden>
+    <canvas id="tape" width="720" height="720" aria-hidden="true"></canvas>
+    <canvas id="film" width="1600" height="900" aria-hidden="true"></canvas>
+  </div>
 
   <div class="modal" id="help-sheet" hidden>
     <div class="sheet">
@@ -123,7 +126,7 @@
         <span class="keychip">` - = [ ] \ ; '</span><span>Symbols also play</span>
         <span class="keychip">Shift + key</span><span>Uppercase / ! @ # in the video</span>
         <span class="keychip">OCT / TR</span><span>Octave and transpose per row</span>
-        <span class="keychip">Record</span><span>Letters drop, sentence forms, clip is ready on stop</span>
+        <span class="keychip">Record</span><span>Captures the whole app and the letter clip</span>
         <span class="keychip">Clear / ⌫</span><span>Wipe the sentence, or delete the last letter</span>
         <span class="keychip">↑ / ↓</span><span>Octave</span>
         <span class="keychip">Tab</span><span>Sustain</span>
@@ -177,6 +180,14 @@
             <option value="light">Light</option>
           </select>
         </label>
+        <label class="field switch-field">Every key plays a note
+          <input id="every-key" type="checkbox" role="switch">
+        </label>
+        <p class="fine">Keys that aren’t on a row still sound, using the home-row instrument.</p>
+        <label class="field switch-field">Keep playing in the background
+          <input id="keep-alive" type="checkbox" role="switch">
+        </label>
+        <p class="fine">A dock app can’t hear typing in other programs. This keeps KeySax from going silent when you click away.</p>
       </div>
 
       <div class="tab-panel" id="tab-keys" hidden>
@@ -212,8 +223,10 @@
     <div class="sheet export-sheet">
       <h3>Download</h3>
       <p id="sentence-preview"></p>
-      <button class="choice" data-export="clipAudio" type="button"><b>Video + audio</b><span>Letters dropping, sentence forming, with sound</span></button>
-      <button class="choice" data-export="clipVideo" type="button"><b>Video only</b><span>The same clip, silent</span></button>
+      <button class="choice" data-export="appAudio" type="button"><b>Whole app + audio</b><span>The keyboard, falling letters, and sound — for posting</span></button>
+      <button class="choice" data-export="appVideo" type="button"><b>Whole app, silent</b><span>The same view, no sound</span></button>
+      <button class="choice" data-export="clipAudio" type="button"><b>Letters + audio</b><span>Square clip of letters dropping, with sound</span></button>
+      <button class="choice" data-export="clipVideo" type="button"><b>Letters only</b><span>Square clip, silent</span></button>
       <button class="choice" data-export="audioOnly" type="button"><b>Audio only (WAV)</b><span>Just the WAV recording</span></button>
       <div class="sheet-actions"><button class="glass-btn" id="export-cancel" type="button">Cancel</button></div>
     </div>
