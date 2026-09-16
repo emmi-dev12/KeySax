@@ -2,50 +2,17 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A native macOS instrument. Press **1–0** and a saxophone answers immediately — the YouTube number-key sax, as a real Mac app.
+A keyboard instrument in the browser. Press **1–0** and a saxophone answers — the YouTube number-key sax, as a PWA you can install on a phone, tablet, or computer.
 
-Sounds are synthesized on this Mac (additive sax plus an optional reed/waveguide engine). Nothing is streamed, licensed, or downloaded after install.
-
-## Play in the browser
-
-Phone and tablet (and desktop) — no install:
+Sounds are synthesized locally. Nothing is streamed, licensed, or uploaded. No account.
 
 **https://emmi-dev12.github.io/KeySax/**
 
-Tap **Tap to play KeySax**, then use the on-screen pads. Add to Home Screen for a fullscreen app.
+Tap **Tap to play**, then use the on-screen pads or a hardware keyboard. Install it:
 
-## Requirements
-
-- macOS 27
-- Apple Silicon (Universal `arm64 + x86_64` if you build with `scripts/build.sh`)
-- Xcode 26+ **or** the macOS 27 Command Line Tools
-
-## Open in Xcode
-
-```bash
-open /Users/mh/KeySax/KeySax.xcodeproj
-```
-
-Select the **KeySax** scheme, destination **My Mac**, and Run. Full Xcode is required for `xcodebuild`; Command Line Tools alone should use the script below.
-
-The project targets **macOS 27**, uses Swift 6, SwiftUI, and Apple audio frameworks only (`AVAudioEngine`, Core Audio, CoreMIDI, Accelerate). No Electron, no web view, no accounts, no analytics.
-
-## Build from the command line
-
-This repo also builds without a full Xcode.app, using `swiftc`:
-
-```bash
-cd /Users/mh/KeySax
-chmod +x scripts/build.sh
-./scripts/build.sh
-open build/KeySax.app
-```
-
-That produces a Universal (`arm64` + `x86_64`) `build/KeySax.app`. First launch synthesizes 61 chromatic notes × 2 variants (122 local WAVs) for the current preset, then caches them.
-
-- Release, Universal by default
-- Debug: `KEYSX_CONFIG=debug ./scripts/build.sh`
-- Apple Silicon only: `KEYSX_UNIVERSAL=0 ./scripts/build.sh`
+- **Chrome / Edge** — Install app (download icon in the top bar, or the browser menu)
+- **iPhone / iPad** — Share → Add to Home Screen
+- **Safari on Mac** — File → Add to Dock
 
 ## Play
 
@@ -69,6 +36,8 @@ Pick **Drums**, Rhodes, glass, chimes, music box, pad, or any sax on a row.
 | `Esc` | All notes off |
 | Record | Letters drop, sentence forms, clip is ready on stop |
 | Clear / ⌫ | Wipe the sentence, or delete the last letter |
+| `⌘⇧R` | Record |
+| `⌘⇧L` | Random solo |
 
 ### Export
 
@@ -82,40 +51,15 @@ Record while you play: letters drop down and the sentence writes itself at the b
 
 Alto / Tenor / Bari / YouTube sax, piano, Rhodes, guitar, drums, kalimba, crystal glass, chimes, music box, soft pad, space thump.
 
-Tone engine (Settings): **Classic Sax** or **Reed Model**.
-
-Settings persist in `UserDefaults`.
+Tone engine (Settings): **Classic Sax** or **Reed Model**. Settings persist in the browser.
 
 ## How the sound is made
 
-On first launch KeySax renders local banks for sax, piano, and guitar (no licensed samples):
+Notes are rendered in the browser (no licensed samples):
 
-- **Sax** — conical-bore harmonics, formant resonators, reed shaping, breath, chiff, delayed vibrato
+- **Sax** — conical-bore harmonics, formant resonators, reed shaping, breath, chiff, delayed vibrato — or a waveguide reed model
 - **Piano** — stretched partials, hammer noise, faster decay on high harmonics
 - **Guitar** — plucked Karplus–Strong string with pick position and body resonances
-
-Buffers are cached as 16-bit WAVs in:
-
-```
-~/Library/Application Support/KeySax/Banks/
-```
-
-Playback is `AVAudioEngine` + a pool of `AVAudioPlayerNode`s, preloaded in memory. The I/O buffer is requested at 128 frames for low latency. No network is required after install.
-
-## Project layout
-
-```
-KeySax/
-  KeySaxApp.swift          SwiftUI app entry
-  App/                     settings + session model
-  Audio/                   synthesis, cache, engine, recorder
-  Music/                   scales, key map, random solo
-  Input/                   local NSEvent key monitor
-  MIDI/                    CoreMIDI output
-  UI/                      pad, chrome, settings, waveform
-  Assets.xcassets          app icon
-  Resources/AppIcon.icns
-```
 
 ## License
 

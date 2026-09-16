@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="KeySax">
   <meta name="theme-color" content="#0f0b0a">
   <title>KeySax</title>
   <link rel="icon" href="icon.png">
@@ -13,7 +16,14 @@
 </head>
 <body>
   <div class="gate" id="gate">
-    <button type="button" id="start">Tap to play KeySax</button>
+    <div class="gate-card">
+      <img src="icon.png" width="64" height="64" alt="">
+      <h2>KeySax</h2>
+      <p>Four rows. Local sounds. No account.</p>
+      <button type="button" id="start">Tap to play</button>
+      <button type="button" class="ghost" id="install-gate" hidden>Install app</button>
+      <p class="install-hint" id="ios-hint" hidden>On iPhone: Share → Add to Home Screen. On Mac Safari: File → Add to Dock.</p>
+    </div>
   </div>
 
   <div class="app">
@@ -28,6 +38,9 @@
       <canvas id="wave" class="wave" width="160" height="28" aria-label="Live spectrum"></canvas>
       <button class="glass-icon" id="help" type="button" title="Play guide" aria-label="Play guide">
         <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.8 7.6c.2-1.4 1.3-2.2 2.5-2.2 1.3 0 2.3.8 2.3 2.1 0 1.1-.7 1.6-1.6 2.2-.8.5-1.1 1-.1 1.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="14.4" r="1" fill="currentColor"/></svg>
+      </button>
+      <button class="glass-icon" id="install" type="button" title="Install KeySax" aria-label="Install KeySax" hidden>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9M6.5 8.5L10 12l3.5-3.5M4 16h12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <button class="glass-icon" id="settings" type="button" title="Settings" aria-label="Settings">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h14M5.5 10h9M7.5 13.5h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
@@ -126,39 +139,82 @@
         <span class="keychip">↑ / ↓</span><span>Octave</span>
         <span class="keychip">Tab</span><span>Sustain</span>
         <span class="keychip">Esc</span><span>All notes off</span>
+        <span class="keychip">⌘⇧R</span><span>Record</span>
+        <span class="keychip">⌘⇧L</span><span>Random solo</span>
       </div>
-      <p class="fine">Each row has its own menu — Alto Sax, piano, guitar, kalimba, glass, chimes, and more. ABC / QWERTY layout.</p>
+      <p class="fine">Each row has its own menu — Alto Sax, piano, guitar, kalimba, glass, chimes, and more. ABC / QWERTY layout. Install as an app for fullscreen play.</p>
       <div class="sheet-actions"><button class="glass-btn" id="help-close" type="button">Close</button></div>
     </div>
   </div>
 
   <div class="modal" id="settings-sheet" hidden>
-    <div class="sheet">
+    <div class="sheet settings-sheet">
       <h3>Settings</h3>
-      <label class="field">Appearance
-        <select id="appearance">
-          <option value="system">System</option>
-          <option value="dark" selected>Dark</option>
-          <option value="light">Light</option>
-        </select>
-      </label>
-      <label class="field">Scale
-        <select id="scale">
-          <option value="youtube" selected>YouTube</option>
-          <option value="major">Major</option>
-          <option value="minor">Natural Minor</option>
-          <option value="pentatonicMajor">Major Pentatonic</option>
-          <option value="pentatonicMinor">Minor Pentatonic</option>
-          <option value="blues">Blues</option>
-          <option value="mixolydian">Mixolydian</option>
-          <option value="dorian">Dorian</option>
-          <option value="chromatic">Chromatic</option>
-        </select>
-      </label>
-      <label class="field">Root
-        <select id="root"></select>
-      </label>
-      <p class="fine">KeySax generates every sound in this browser. No samples were licensed, no account, nothing is uploaded.</p>
+      <div class="tabs" role="tablist">
+        <button class="tab on" type="button" data-tab="horn">Horn</button>
+        <button class="tab" type="button" data-tab="keys">Keys</button>
+        <button class="tab" type="button" data-tab="midi">MIDI</button>
+      </div>
+
+      <div class="tab-panel" id="tab-horn">
+        <div id="row-settings"></div>
+        <label class="field">Sax tone engine
+          <select id="engine">
+            <option value="additive" selected>Classic Sax</option>
+            <option value="reed">Reed Model</option>
+          </select>
+        </label>
+        <p class="fine" id="engine-blurb">Additive harmonics + breath</p>
+        <label class="field">Scale
+          <select id="scale">
+            <option value="youtube" selected>YouTube</option>
+            <option value="major">Major</option>
+            <option value="minor">Natural Minor</option>
+            <option value="pentatonicMajor">Major Pentatonic</option>
+            <option value="pentatonicMinor">Minor Pentatonic</option>
+            <option value="blues">Blues</option>
+            <option value="mixolydian">Mixolydian</option>
+            <option value="dorian">Dorian</option>
+            <option value="chromatic">Chromatic</option>
+          </select>
+        </label>
+        <label class="field">Root
+          <select id="root"></select>
+        </label>
+        <label class="field">Appearance
+          <select id="appearance">
+            <option value="system">System</option>
+            <option value="dark" selected>Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="tab-panel" id="tab-keys" hidden>
+        <p class="fine">1–0, QWERTY, home row, and bottom row each play. Pick a sound on the row itself.</p>
+        <div class="help-grid">
+          <span class="keychip">Number row</span><span>1 2 3 4 5 6 7 8 9 0</span>
+          <span class="keychip">QWERTY</span><span>Q W E R T Y U I O P</span>
+          <span class="keychip">Home</span><span>A S D F G H J K L ;</span>
+          <span class="keychip">Bottom</span><span>Z X C V B N M , . /</span>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-midi" hidden>
+        <label class="field switch-field">Send MIDI notes
+          <input id="midi-enable" type="checkbox" role="switch">
+        </label>
+        <label class="field">Destination
+          <select id="midi-dest">
+            <option value="0">No MIDI destinations</option>
+          </select>
+        </label>
+        <button class="glass-btn" id="midi-refresh" type="button">Refresh destinations</button>
+        <p class="fine">KeySax generates every sound in this browser. No samples were licensed, no account, nothing is uploaded.</p>
+        <button class="glass-btn" id="install-settings" type="button" hidden>Install KeySax</button>
+        <p class="install-hint" id="ios-hint-settings" hidden>iPhone: Share → Add to Home Screen. Mac Safari: File → Add to Dock.</p>
+      </div>
+
       <div class="sheet-actions"><button class="glass-btn" id="settings-close" type="button">Close</button></div>
     </div>
   </div>

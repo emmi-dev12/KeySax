@@ -66,6 +66,11 @@ let root = 0;
 let scaleId = "youtube";
 let appearance = "dark";
 let volume = 0.85;
+let engine = "additive";
+let midiAccess = null;
+let midiDestIndex = 0;
+let deferredInstall = null;
+const STORE = "keysax-pwa-v1";
 
 const drops = [];
 let sentence = "";
@@ -578,9 +583,80 @@ function renderDrum(midi) {
   return fade(normalize(out, 0.3), sr, 0.0002, 0.02);
 }
 
+function fracDelay(maxLen) {
+  const buf = new Float32Array(Math.max(32, maxLen));
+  let w = 0;
+  return {
+    read(delay) {
+      const n = buf.length;
+      let r = w - Math.max(1, delay);
+      while (r < 0) r += n;
+      const i0 = ((Math.floor(r) % n) + n) % n;
+      const i1 = (i0 + 1) % n;
+      const f = r - Math.floor(r);
+      return buf[i0] * (1 - f) + buf[i1] * f;
+    },
+    write(x) {
+      buf[w] = x;
+      w++;
+      if (w >= buf.length) w = 0;
+    }
+  };
+}
+
+function renderReed(midi, id) {
+  const p = SAX[id] || SAX.alto;
+  const sr = ctx.sampleRate, f0 = midiToHz(midi);
+  const dur = 1.55, n = Math.floor(dur * sr), inv = 1 / sr;
+  const next = makeRng(midi * 11017 + id.length * 42421 + 7);
+  const out = new Float32Array(n);
+  const delay = fracDelay(Math.floor(sr / 40) + 8);
+  const boreLP = onePole();
+  const bell = bqLP(1100 + p.bright * 4400, 0.7, sr);
+  const form1 = bqBP(p.formants[0][0], 3.4, sr);
+  const form2 = bqBP(p.formants[1][0], 2.8, sr);
+  const breathBP = bqBP(p.breathF, 1.1, sr);
+  const dc = bqHP(40, 0.7, sr);
+  const vibPhase = next();
+  const stiffness = 2.4 + p.sat * 1.2;
+  let wander = 0;
+  const attack = 0.016, decay = 0.1, hold = dur - attack - decay - 0.05;
+  for (let i = 0; i < n; i++) {
+    const t = i * inv;
+    const env = adsr(t, attack, decay, 0.8, 0.05, hold);
+    let pressure = 0.7 * env;
+    if (t < 0.05) pressure *= 0.5 + 0.5 * (t / 0.05);
+    wander += (next() - 0.5) * 0.08; wander *= 0.997;
+    let vib = 0;
+    if (t > p.vibDelay) {
+      const vt = t - p.vibDelay;
+      vib = Math.sin(2 * Math.PI * (vibPhase + p.vibR * vt)) * p.vibD * Math.min(1, vt / 0.2);
+    }
+    let scoopEnv = 1;
+    if (t < 0.06) { const x = t / 0.06; scoopEnv = centsToRatio(-p.scoop * (1 - x) * (1 - x)); }
+    const freq = f0 * scoopEnv * centsToRatio(vib + wander);
+    const delaySamp = Math.max(4, sr / freq);
+    const y = delay.read(delaySamp);
+    const noise = next() * 2 - 1;
+    const reed = tanhApprox((pressure - y) * stiffness);
+    const flow = reed * 0.58 + noise * (0.035 + p.breath * 0.4) * pressure;
+    const intoBore = flow + y * (0.84 + 0.08 * (1 - p.bright));
+    delay.write(lp1(boreLP, intoBore, 0.16 + p.bright * 0.38));
+    let tone = y + flow * 0.18;
+    tone = bq(bell, tone);
+    tone = tone * 0.55 + bq(form1, tone) * 0.5 + bq(form2, tone) * 0.28;
+    const breath = bq(breathBP, noise) * p.breath * env;
+    let s = (tone + breath) * env;
+    if (p.growl > 0) s *= 1 + p.growl * Math.sin(2 * Math.PI * (0.3 + 66 * t));
+    out[i] = bq(dc, s);
+  }
+  return fade(normalize(out, 0.32), sr, 0.0015, 0.025);
+}
+
 function renderVoice(id, midi) {
   switch (id) {
-    case "alto": case "tenor": case "bari": case "youtube": return renderSax(midi, id);
+    case "alto": case "tenor": case "bari": case "youtube":
+      return engine === "reed" ? renderReed(midi, id) : renderSax(midi, id);
     case "piano": return renderPiano(midi);
     case "guitar": return renderGuitar(midi);
     case "kalimba": return renderKalimba(midi);
@@ -625,7 +701,7 @@ function playBuffer(audioBuf, hold) {
 }
 
 function startVoice(id, midi) {
-  const key = id + ":" + midi;
+  const key = id + ":" + midi + ":" + (["alto","tenor","bari","youtube"].includes(id) ? engine : "x");
   let buf = bank.get(key);
   if (!buf) {
     buf = bufferFrom(renderVoice(id, midi));
@@ -642,7 +718,7 @@ function unlock() {
   }
   ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
   master = ctx.createGain();
-  master.gain.value = 0.85;
+  master.gain.value = volume;
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 2.4;
   comp.attack.value = 0.004; comp.release.value = 0.12;
@@ -940,14 +1016,16 @@ function render() {
       if (voice.id === row.voice) o.selected = true;
       og.append(o);
     });
-    sel.onchange = () => { row.voice = sel.value; render(); };
+    sel.onchange = () => { row.voice = sel.value; render(); save(); fillRowSettings(); };
     wrap.querySelectorAll("[data-oct]").forEach(b => b.onclick = () => {
       row.oct = Math.min(7, Math.max(1, row.oct + Number(b.dataset.d)));
       render();
+      save();
     });
     wrap.querySelectorAll("[data-tr]").forEach(b => b.onclick = () => {
       row.tr = Math.min(12, Math.max(-12, row.tr + Number(b.dataset.d)));
       render();
+      save();
     });
     const pads = wrap.querySelector(".pads");
     ns.forEach((n, i) => {
@@ -1126,10 +1204,121 @@ function flash(text) {
   document.getElementById("status").textContent = text;
 }
 
+function save() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify({
+      appearance, scaleId, root, volume, sustain, letterVideo, midiEnabled, midiDestIndex,
+      globalOct, globalTr, engine,
+      rows: ROWS.map(r => ({ id: r.id, voice: r.voice, oct: r.oct, tr: r.tr }))
+    }));
+  } catch (_) {}
+}
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE) || "null");
+    if (!s) return;
+    if (s.appearance) appearance = s.appearance;
+    if (s.scaleId) scaleId = s.scaleId;
+    if (typeof s.root === "number") root = s.root;
+    if (typeof s.volume === "number") volume = s.volume;
+    if (typeof s.sustain === "boolean") sustain = s.sustain;
+    if (typeof s.letterVideo === "boolean") letterVideo = s.letterVideo;
+    if (typeof s.midiEnabled === "boolean") midiEnabled = s.midiEnabled;
+    if (typeof s.midiDestIndex === "number") midiDestIndex = s.midiDestIndex;
+    if (typeof s.globalOct === "number") globalOct = s.globalOct;
+    if (typeof s.globalTr === "number") globalTr = s.globalTr;
+    if (s.engine) engine = s.engine;
+    if (Array.isArray(s.rows)) {
+      s.rows.forEach(saved => {
+        const row = ROWS.find(r => r.id === saved.id);
+        if (!row) return;
+        if (saved.voice) row.voice = saved.voice;
+        if (typeof saved.oct === "number") row.oct = saved.oct;
+        if (typeof saved.tr === "number") row.tr = saved.tr;
+      });
+    }
+  } catch (_) {}
+}
+
+function applyForm() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = String(val); };
+  set("appearance", appearance);
+  set("scale", scaleId);
+  set("root", root);
+  set("engine", engine);
+  set("volume", volume);
+  document.getElementById("sustain").checked = sustain;
+  document.getElementById("letter-video").classList.toggle("on", letterVideo);
+  document.getElementById("midi").classList.toggle("on", midiEnabled);
+  document.getElementById("midi-enable").checked = midiEnabled;
+  document.getElementById("engine-blurb").textContent = engine === "reed" ? "Physical-model waveguide" : "Additive harmonics + breath";
+  document.getElementById("record").title = letterVideo ? "Record letter video" : "Record WAV";
+}
+
+function fillRowSettings() {
+  const host = document.getElementById("row-settings");
+  host.innerHTML = "";
+  ROWS.forEach((row, ri) => {
+    const lab = document.createElement("label");
+    lab.className = "field";
+    lab.append({ numbers: "Number row", qwerty: "QWERTY row", home: "Home row", bottom: "Bottom row" }[row.id] || row.title);
+    const sel = document.createElement("select");
+    let group = "", og = null;
+    VOICES.forEach(voice => {
+      if (voice.group !== group) {
+        group = voice.group;
+        og = document.createElement("optgroup");
+        og.label = group;
+        sel.append(og);
+      }
+      const o = document.createElement("option");
+      o.value = voice.id; o.textContent = voice.title;
+      if (voice.id === row.voice) o.selected = true;
+      og.append(o);
+    });
+    sel.onchange = () => { row.voice = sel.value; render(); save(); };
+    lab.append(sel);
+    host.append(lab);
+    void ri;
+  });
+}
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function showInstallHints() {
+  const canPrompt = !!deferredInstall;
+  const standalone = isStandalone();
+  document.getElementById("install").hidden = standalone || !canPrompt;
+  document.getElementById("install-gate").hidden = standalone || !canPrompt;
+  document.getElementById("install-settings").hidden = standalone || !canPrompt;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (/mac/i.test(navigator.userAgent) && !canPrompt && !standalone && !(window.matchMedia("(display-mode: browser)").matches === false));
+  const showIos = !standalone && !canPrompt && (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.userAgent.includes("Safari") && !navigator.userAgent.includes("Chrome") && !navigator.userAgent.includes("Chromium")));
+  document.getElementById("ios-hint").hidden = !showIos;
+  document.getElementById("ios-hint-settings").hidden = !showIos;
+  void ios;
+}
+
+async function promptInstall() {
+  if (!deferredInstall) {
+    showInstallHints();
+    flash("Use the browser menu to install KeySax");
+    return;
+  }
+  deferredInstall.prompt();
+  await deferredInstall.userChoice;
+  deferredInstall = null;
+  showInstallHints();
+  flash("Installed");
+}
+
 function bumpOctave(delta) {
   ROWS.forEach(r => r.oct = Math.min(7, Math.max(1, r.oct + delta)));
   globalOct = Math.min(7, Math.max(1, globalOct + delta));
   render();
+  save();
   flash("Octave " + globalOct);
 }
 
@@ -1137,6 +1326,7 @@ function bumpTranspose(delta) {
   ROWS.forEach(r => r.tr = Math.min(12, Math.max(-12, r.tr + delta)));
   globalTr = Math.min(12, Math.max(-12, globalTr + delta));
   render();
+  save();
 }
 
 function setSustain(on) {
@@ -1144,6 +1334,7 @@ function setSustain(on) {
   const el = document.getElementById("sustain");
   if (el.checked !== sustain) el.checked = sustain;
   if (!sustain) live.forEach((s, id) => { if (!s.voice.hold) s.voice.stop(); });
+  save();
   flash(sustain ? "Sustain on" : "Sustain off");
 }
 function toggleSustain() { setSustain(!sustain); }
@@ -1153,13 +1344,38 @@ function midiSend(on, midi) {
   try { midiOut.send([on ? 0x90 : 0x80, Math.max(0, Math.min(127, midi)), on ? 100 : 0]); } catch (_) {}
 }
 
-async function toggleMIDI() {
-  midiEnabled = !midiEnabled;
+function midiOutputs() {
+  return midiAccess ? [...midiAccess.outputs.values()] : [];
+}
+
+function pickMidi() {
+  const outs = midiOutputs();
+  midiOut = outs[Math.min(midiDestIndex, Math.max(0, outs.length - 1))] || null;
+}
+
+function fillMidiDest() {
+  const sel = document.getElementById("midi-dest");
+  const outs = midiOutputs();
+  sel.innerHTML = "";
+  if (!outs.length) {
+    sel.append(new Option("No MIDI destinations", "0"));
+    midiOut = null;
+    return;
+  }
+  outs.forEach((o, i) => sel.append(new Option(o.name, String(i))));
+  if (midiDestIndex >= outs.length) midiDestIndex = 0;
+  sel.value = String(midiDestIndex);
+  pickMidi();
+}
+
+async function setMIDI(on) {
+  midiEnabled = !!on;
   document.getElementById("midi").classList.toggle("on", midiEnabled);
+  document.getElementById("midi-enable").checked = midiEnabled;
   if (midiEnabled && navigator.requestMIDIAccess) {
     try {
-      const access = await navigator.requestMIDIAccess();
-      midiOut = [...access.outputs.values()][0] || null;
+      midiAccess = await navigator.requestMIDIAccess();
+      fillMidiDest();
       flash(midiOut ? "MIDI out on · " + midiOut.name : "MIDI out on — no destination");
     } catch (_) {
       midiOut = null;
@@ -1167,8 +1383,14 @@ async function toggleMIDI() {
     }
   } else {
     midiOut = null;
-    flash(midiEnabled ? "MIDI not available here" : "MIDI out off");
+    if (midiEnabled) flash("MIDI not available here");
+    else flash("MIDI out off");
   }
+  save();
+}
+
+async function toggleMIDI() {
+  await setMIDI(!midiEnabled);
 }
 
 function playOneShot(midi, dur) {
@@ -1254,6 +1476,7 @@ document.getElementById("tr-up").onclick = () => bumpTranspose(1);
 document.getElementById("volume").oninput = e => {
   volume = Number(e.target.value);
   if (master) master.gain.value = volume;
+  save();
 };
 document.getElementById("clear-letters").onclick = clearLetters;
 document.getElementById("letter-video").onclick = function () {
@@ -1261,6 +1484,7 @@ document.getElementById("letter-video").onclick = function () {
   this.classList.toggle("on", letterVideo);
   this.title = letterVideo ? "Letter video on — letters drop, sentence forms" : "Letter video off";
   document.getElementById("record").title = letterVideo ? "Record letter video" : "Record WAV";
+  save();
 };
 document.getElementById("solo").onclick = () => { if (!ctx) unlock(); toggleSolo(); };
 document.getElementById("midi").onclick = toggleMIDI;
@@ -1268,22 +1492,48 @@ document.getElementById("help").onclick = () => openSheet("help-sheet");
 document.getElementById("help-close").onclick = () => closeSheet("help-sheet");
 document.getElementById("settings").onclick = () => openSheet("settings-sheet");
 document.getElementById("settings-close").onclick = () => closeSheet("settings-sheet");
-document.getElementById("appearance").onchange = e => { appearance = e.target.value; applyAppearance(); };
-document.getElementById("scale").onchange = e => { scaleId = e.target.value; render(); flash("Four rows · " + e.target.selectedOptions[0].textContent); };
-document.getElementById("root").onchange = e => { root = Number(e.target.value); render(); };
-
-(function fillRoot() {
-  const sel = document.getElementById("root");
-  ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"].forEach((name, i) => {
-    const o = document.createElement("option");
-    o.value = String(i); o.textContent = name;
-    if (i === 0) o.selected = true;
-    sel.append(o);
-  });
-})();
+document.getElementById("appearance").onchange = e => { appearance = e.target.value; applyAppearance(); save(); };
+document.getElementById("scale").onchange = e => { scaleId = e.target.value; render(); save(); flash("Four rows · " + e.target.selectedOptions[0].textContent); };
+document.getElementById("root").onchange = e => { root = Number(e.target.value); render(); save(); };
+document.getElementById("engine").onchange = e => {
+  engine = e.target.value;
+  document.getElementById("engine-blurb").textContent = engine === "reed" ? "Physical-model waveguide" : "Additive harmonics + breath";
+  save();
+  flash(engine === "reed" ? "Reed Model" : "Classic Sax");
+};
+document.getElementById("midi-enable").onchange = e => { setMIDI(e.target.checked); };
+document.getElementById("midi-dest").onchange = e => { midiDestIndex = Number(e.target.value); pickMidi(); save(); };
+document.getElementById("midi-refresh").onclick = () => { if (midiEnabled) setMIDI(true); else fillMidiDest(); };
+document.getElementById("install").onclick = promptInstall;
+document.getElementById("install-gate").onclick = promptInstall;
+document.getElementById("install-settings").onclick = promptInstall;
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t === tab));
+    document.querySelectorAll(".tab-panel").forEach(p => { p.hidden = p.id !== "tab-" + tab.dataset.tab; });
+  };
+});
 
 window.addEventListener("keydown", e => {
   if (e.target && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyR") {
+    e.preventDefault();
+    if (!ctx) unlock();
+    recording ? stopRec() : startRec();
+    return;
+  }
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyL") {
+    e.preventDefault();
+    if (!ctx) unlock();
+    toggleSolo();
+    return;
+  }
+  if ((e.metaKey || e.ctrlKey) && e.code === "Period") {
+    e.preventDefault();
+    live.forEach((_, id) => noteOff(id)); spaceOff();
+    flash("All notes off");
+    return;
+  }
   if ((e.metaKey || e.ctrlKey) && e.code === "Backspace") {
     e.preventDefault();
     clearLetters();
@@ -1315,8 +1565,32 @@ window.addEventListener("keyup", e => {
   noteOff(`${ROWS[ri].id}-${i}`);
 });
 window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyAppearance);
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  deferredInstall = e;
+  showInstallHints();
+});
+window.addEventListener("appinstalled", () => {
+  deferredInstall = null;
+  showInstallHints();
+  flash("KeySax installed");
+});
 
+(function fillRoot() {
+  const sel = document.getElementById("root");
+  ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"].forEach((name, i) => {
+    const o = document.createElement("option");
+    o.value = String(i); o.textContent = name;
+    sel.append(o);
+  });
+})();
+
+load();
 applyAppearance();
+applyForm();
+fillRowSettings();
 render();
 startStage();
+showInstallHints();
+if (midiEnabled) setMIDI(true);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
