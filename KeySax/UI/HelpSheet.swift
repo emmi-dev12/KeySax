@@ -19,6 +19,7 @@ struct HelpSheet: View {
                 row("Shift + key", "Uppercase / ! @ # in the video")
                 row("OCT / TR", "Octave and transpose per row")
                 row("Record", "Letters drop, sentence forms, clip is ready on stop")
+                row("Clear / ⌫", "Wipe the sentence, or delete the last letter")
                 row("↑ / ↓", "Octave")
                 row("Tab", "Sustain")
                 row("Esc", "All notes off")

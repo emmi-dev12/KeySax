@@ -355,6 +355,14 @@ final class LiveLetterCapture {
         }
     }
 
+    func clearHits() {
+        hits = []
+    }
+
+    func removeLastHit() {
+        if !hits.isEmpty { hits.removeLast() }
+    }
+
     func stop(extraHold: TimeInterval = 1.2) async -> URL? {
         stopTimer()
         guard let writer, let videoIn, let adaptor else { return nil }

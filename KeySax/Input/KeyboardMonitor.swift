@@ -21,8 +21,8 @@ final class KeyboardMonitor {
                 }
                 return event
             }
-            if event.type == .keyDown, event.isARepeat { return nil }
             guard let token = KeyToken.from(event: event) else { return event }
+            if event.type == .keyDown, event.isARepeat, token != "backspace" { return nil }
             let consumed: Bool
             if event.type == .keyDown {
                 consumed = self.onDown?(token, event) ?? false

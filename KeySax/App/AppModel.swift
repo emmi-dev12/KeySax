@@ -197,6 +197,14 @@ final class AppModel {
             panic()
             return true
         }
+        if token == "backspace" {
+            backspaceLetter()
+            return true
+        }
+        if token == "delete" {
+            clearLetters()
+            return true
+        }
         if token == "?" {
             showHelp.toggle()
             return true
@@ -359,6 +367,33 @@ final class AppModel {
         spacePressed = false
         audio.allNotesOff(sendMIDI: true)
         flash("All notes off")
+    }
+
+    func clearLetters() {
+        stageLetters = []
+        liveSentence = ""
+        if isRecording {
+            letterHits = []
+            letterCapture.clearHits()
+        }
+        flash("Cleared")
+    }
+
+    func backspaceLetter() {
+        guard !liveSentence.isEmpty else { return }
+        if let last = stageLetters.popLast() {
+            if liveSentence.hasSuffix(last.glyph) {
+                liveSentence.removeLast(last.glyph.count)
+            } else if !liveSentence.isEmpty {
+                liveSentence.removeLast()
+            }
+        } else {
+            liveSentence.removeLast()
+        }
+        if isRecording, !letterHits.isEmpty {
+            letterHits.removeLast()
+            letterCapture.removeLastHit()
+        }
     }
 
     func setPreset(_ preset: SaxPreset) {

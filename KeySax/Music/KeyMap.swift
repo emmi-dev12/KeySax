@@ -39,6 +39,8 @@ enum KeyToken {
         case 126: return "up"
         case 123: return "left"
         case 124: return "right"
+        case 51: return "backspace"
+        case 117: return "delete"
         default: break
         }
         guard let chars = event.charactersIgnoringModifiers, let first = chars.first else {
@@ -59,6 +61,8 @@ enum KeyToken {
         case "down": return "↓"
         case "left": return "←"
         case "right": return "→"
+        case "backspace": return "⌫"
+        case "delete": return "⌦"
         default: return token.uppercased()
         }
     }

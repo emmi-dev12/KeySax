@@ -35,6 +35,8 @@ struct KeySaxApp: App {
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button("Random Sax Solo") { model.toggleSolo() }
                     .keyboardShortcut("l", modifiers: [.command, .shift])
+                Button("Clear Letters") { model.clearLetters() }
+                    .keyboardShortcut(.delete, modifiers: [.command])
                 Button("All Notes Off") { model.panic() }
                     .keyboardShortcut(".", modifiers: [.command])
                 Divider()

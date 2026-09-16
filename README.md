@@ -68,6 +68,7 @@ Pick **Drums**, Rhodes, glass, chimes, music box, pad, or any sax on a row.
 | `Tab` | Sustain |
 | `Esc` | All notes off |
 | Record | Letters drop, sentence forms, clip is ready on stop |
+| Clear / ⌫ | Wipe the sentence, or delete the last letter |
 
 ### Export
 

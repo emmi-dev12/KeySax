@@ -130,6 +130,14 @@ struct BottomBar: View {
 
             HStack(spacing: 6) {
                 Button {
+                    model.clearLetters()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .help("Clear letters (⌫ last, ⌦ all)")
+                .disabled(model.liveSentence.isEmpty && model.stageLetters.isEmpty)
+
+                Button {
                     model.settings.letterVideo.toggle()
                     model.settings.persist()
                 } label: {

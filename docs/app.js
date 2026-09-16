@@ -692,6 +692,19 @@ function spawnDrop(ch, color, keyId) {
   if (!recording && sentence.length > 96) sentence = sentence.slice(-80);
 }
 
+function clearLetters() {
+  drops.length = 0;
+  sentence = "";
+  flash("Cleared");
+}
+
+function backspaceLetter() {
+  if (!drops.length && !sentence) return;
+  const last = drops.pop();
+  if (last && sentence.endsWith(last.ch)) sentence = sentence.slice(0, -last.ch.length);
+  else if (sentence) sentence = sentence.slice(0, -1);
+}
+
 function endDrop(keyId) {
   const now = performance.now();
   for (let i = drops.length - 1; i >= 0; i--) {
@@ -1242,6 +1255,7 @@ document.getElementById("volume").oninput = e => {
   volume = Number(e.target.value);
   if (master) master.gain.value = volume;
 };
+document.getElementById("clear-letters").onclick = clearLetters;
 document.getElementById("letter-video").onclick = function () {
   letterVideo = !letterVideo;
   this.classList.toggle("on", letterVideo);
@@ -1269,8 +1283,15 @@ document.getElementById("root").onchange = e => { root = Number(e.target.value);
 })();
 
 window.addEventListener("keydown", e => {
-  if (e.metaKey || e.ctrlKey || e.repeat) return;
   if (e.target && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
+  if ((e.metaKey || e.ctrlKey) && e.code === "Backspace") {
+    e.preventDefault();
+    clearLetters();
+    return;
+  }
+  if (e.metaKey || e.ctrlKey || (e.repeat && e.code !== "Backspace")) return;
+  if (e.code === "Backspace") { e.preventDefault(); backspaceLetter(); return; }
+  if (e.code === "Delete") { e.preventDefault(); clearLetters(); return; }
   if (e.code === "Space") { e.preventDefault(); spaceOn(); return; }
   if (e.code === "Tab") { e.preventDefault(); toggleSustain(); return; }
   if (e.code === "Escape") {
