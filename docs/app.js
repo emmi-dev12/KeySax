@@ -1676,12 +1676,7 @@ document.querySelectorAll(".tab").forEach(tab => {
 
 window.addEventListener("keydown", e => {
   if (e.target && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
-  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyR") {
-    e.preventDefault();
-    if (!ctx) unlock();
-    recording ? stopRec() : startRec();
-    return;
-  }
+  if ((e.metaKey || e.ctrlKey) && e.code === "KeyR") return;
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyL") {
     e.preventDefault();
     if (!ctx) unlock();

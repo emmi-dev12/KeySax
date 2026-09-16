@@ -32,7 +32,7 @@ ABC / QWERTY. Each row has its own sound, octave, and transpose. Symbols play to
 | `Esc` | All notes off |
 | Record | Letters drop, sentence forms, clip is ready on stop |
 | Clear / ⌫ | Wipe the sentence, or delete the last letter |
-| `⌘⇧R` | Record |
+| `⌘R` / `⌘⇧R` | Reload |
 | `⌘⇧L` | Random solo |
 
 Settings (scale, root, engine, appearance, MIDI, row sounds) are stored in the browser on this device.
