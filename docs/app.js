@@ -731,9 +731,9 @@ function unlock() {
   analyser.smoothingTimeConstant = 0.72;
   comp.connect(analyser);
   master.gain.value = volume;
-  document.getElementById("gate").hidden = true;
-  document.getElementById("status").textContent = "Four rows · " + (document.getElementById("scale").selectedOptions[0]?.textContent || "YouTube");
-  startStage();
+  const scaleTitle = document.getElementById("scale")?.selectedOptions[0]?.textContent || "YouTube";
+  document.getElementById("status").textContent = "Four rows · " + scaleTitle;
+  if (!stageStarted) startStage();
   warmup();
 }
 
@@ -745,7 +745,7 @@ function warmup() {
   const step = () => {
     if (!ctx || i >= jobs.length) return;
     const [id, midi] = jobs[i++];
-    const key = id + ":" + midi;
+    const key = id + ":" + midi + ":" + (["alto","tenor","bari","youtube"].includes(id) ? engine : "x");
     if (!bank.has(key)) {
       try { bank.set(key, bufferFrom(renderVoice(id, midi))); } catch (_) {}
     }
@@ -1204,38 +1204,44 @@ function flash(text) {
   document.getElementById("status").textContent = text;
 }
 
+function prefsSnapshot() {
+  return {
+    appearance, scaleId, root, volume, sustain, letterVideo, midiEnabled, midiDestIndex,
+    globalOct, globalTr, engine,
+    rows: ROWS.map(r => ({ id: r.id, voice: r.voice, oct: r.oct, tr: r.tr }))
+  };
+}
+
 function save() {
-  try {
-    localStorage.setItem(STORE, JSON.stringify({
-      appearance, scaleId, root, volume, sustain, letterVideo, midiEnabled, midiDestIndex,
-      globalOct, globalTr, engine,
-      rows: ROWS.map(r => ({ id: r.id, voice: r.voice, oct: r.oct, tr: r.tr }))
-    }));
-  } catch (_) {}
+  const payload = JSON.stringify(prefsSnapshot());
+  try { localStorage.setItem(STORE, payload); } catch (_) {}
 }
 
 function load() {
+  let raw = null;
+  try { raw = localStorage.getItem(STORE); } catch (_) {}
+  if (!raw) return;
   try {
-    const s = JSON.parse(localStorage.getItem(STORE) || "null");
-    if (!s) return;
-    if (s.appearance) appearance = s.appearance;
-    if (s.scaleId) scaleId = s.scaleId;
-    if (typeof s.root === "number") root = s.root;
-    if (typeof s.volume === "number") volume = s.volume;
+    const s = JSON.parse(raw);
+    if (!s || typeof s !== "object") return;
+    if (s.appearance === "system" || s.appearance === "dark" || s.appearance === "light") appearance = s.appearance;
+    if (s.scaleId && SCALES[s.scaleId]) scaleId = s.scaleId;
+    if (Number.isFinite(s.root)) root = Math.max(0, Math.min(11, s.root | 0));
+    if (Number.isFinite(s.volume)) volume = Math.max(0, Math.min(1, Number(s.volume)));
     if (typeof s.sustain === "boolean") sustain = s.sustain;
     if (typeof s.letterVideo === "boolean") letterVideo = s.letterVideo;
     if (typeof s.midiEnabled === "boolean") midiEnabled = s.midiEnabled;
-    if (typeof s.midiDestIndex === "number") midiDestIndex = s.midiDestIndex;
-    if (typeof s.globalOct === "number") globalOct = s.globalOct;
-    if (typeof s.globalTr === "number") globalTr = s.globalTr;
-    if (s.engine) engine = s.engine;
+    if (Number.isFinite(s.midiDestIndex)) midiDestIndex = Math.max(0, s.midiDestIndex | 0);
+    if (Number.isFinite(s.globalOct)) globalOct = Math.max(1, Math.min(7, s.globalOct | 0));
+    if (Number.isFinite(s.globalTr)) globalTr = Math.max(-12, Math.min(12, s.globalTr | 0));
+    if (s.engine === "additive" || s.engine === "reed") engine = s.engine;
     if (Array.isArray(s.rows)) {
       s.rows.forEach(saved => {
         const row = ROWS.find(r => r.id === saved.id);
         if (!row) return;
-        if (saved.voice) row.voice = saved.voice;
-        if (typeof saved.oct === "number") row.oct = saved.oct;
-        if (typeof saved.tr === "number") row.tr = saved.tr;
+        if (saved.voice && VOICES.some(v => v.id === saved.voice)) row.voice = saved.voice;
+        if (Number.isFinite(saved.oct)) row.oct = Math.max(1, Math.min(7, saved.oct | 0));
+        if (Number.isFinite(saved.tr)) row.tr = Math.max(-12, Math.min(12, saved.tr | 0));
       });
     }
   } catch (_) {}
@@ -1291,14 +1297,13 @@ function isStandalone() {
 function showInstallHints() {
   const canPrompt = !!deferredInstall;
   const standalone = isStandalone();
-  document.getElementById("install").hidden = standalone || !canPrompt;
-  document.getElementById("install-gate").hidden = standalone || !canPrompt;
-  document.getElementById("install-settings").hidden = standalone || !canPrompt;
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (/mac/i.test(navigator.userAgent) && !canPrompt && !standalone && !(window.matchMedia("(display-mode: browser)").matches === false));
+  const install = document.getElementById("install");
+  const installSettings = document.getElementById("install-settings");
+  if (install) install.hidden = standalone || !canPrompt;
+  if (installSettings) installSettings.hidden = standalone || !canPrompt;
   const showIos = !standalone && !canPrompt && (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.userAgent.includes("Safari") && !navigator.userAgent.includes("Chrome") && !navigator.userAgent.includes("Chromium")));
-  document.getElementById("ios-hint").hidden = !showIos;
-  document.getElementById("ios-hint-settings").hidden = !showIos;
-  void ios;
+  const iosHint = document.getElementById("ios-hint-settings");
+  if (iosHint) iosHint.hidden = !showIos;
 }
 
 async function promptInstall() {
@@ -1456,7 +1461,6 @@ function applyAppearance() {
 function openSheet(id) { document.getElementById(id).hidden = false; }
 function closeSheet(id) { document.getElementById(id).hidden = true; }
 
-document.getElementById("start").onclick = unlock;
 document.getElementById("sustain").onchange = function () { setSustain(this.checked); };
 document.getElementById("record").onclick = () => {
   if (!ctx) unlock();
@@ -1505,7 +1509,6 @@ document.getElementById("midi-enable").onchange = e => { setMIDI(e.target.checke
 document.getElementById("midi-dest").onchange = e => { midiDestIndex = Number(e.target.value); pickMidi(); save(); };
 document.getElementById("midi-refresh").onclick = () => { if (midiEnabled) setMIDI(true); else fillMidiDest(); };
 document.getElementById("install").onclick = promptInstall;
-document.getElementById("install-gate").onclick = promptInstall;
 document.getElementById("install-settings").onclick = promptInstall;
 document.querySelectorAll(".tab").forEach(tab => {
   tab.onclick = () => {
@@ -1592,5 +1595,11 @@ fillRowSettings();
 render();
 startStage();
 showInstallHints();
+document.getElementById("status").textContent = "Four rows · " + (document.getElementById("scale").selectedOptions[0]?.textContent || "YouTube");
 if (midiEnabled) setMIDI(true);
+["pointerdown", "keydown", "touchstart"].forEach(type => {
+  window.addEventListener(type, () => unlock(), { capture: true });
+});
+window.addEventListener("pagehide", save);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") save(); });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
