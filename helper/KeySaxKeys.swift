@@ -27,29 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
-        relocateToApplicationsIfNeeded()
         setupWebView()
         setupMenu()
         startTap()
         startStatusServer()
         promptAccessibilityIfNeeded()
-    }
-
-    private func relocateToApplicationsIfNeeded() {
-        let dest = URL(fileURLWithPath: "/Applications/KeySax Keys.app")
-        let here = Bundle.main.bundleURL
-        guard here.path != dest.path else { return }
-        guard here.pathExtension == "app" else { return }
-        do {
-            if FileManager.default.fileExists(atPath: dest.path) {
-                try FileManager.default.removeItem(at: dest)
-            }
-            try FileManager.default.copyItem(at: here, to: dest)
-            NSWorkspace.shared.open(dest)
-            exit(0)
-        } catch {
-            // Stay where we were launched (Downloads, etc.)
-        }
     }
 
     private func setupWebView() {
