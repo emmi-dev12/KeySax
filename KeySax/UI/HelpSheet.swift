@@ -18,9 +18,8 @@ struct HelpSheet: View {
                 row("` - = [ ] \\ ; '", "Symbols also play")
                 row("Shift + key", "Uppercase / ! @ # in the video")
                 row("OCT / TR", "Octave and transpose per row")
-                row("Record", "Then pick letters, sentence, audio, or video")
+                row("Record", "Letters drop, sentence forms, clip is ready on stop")
                 row("↑ / ↓", "Octave")
-                row("[ / ]", "Transpose")
                 row("Tab", "Sustain")
                 row("Esc", "All notes off")
             }
@@ -67,7 +66,7 @@ struct ExportSheet: View {
                     .textSelection(.enabled)
             }
             VStack(spacing: 8) {
-                ForEach(ExportKind.allCases) { kind in
+                ForEach([ExportKind.lettersAudio, .lettersVideo, .audioOnly]) { kind in
                     Button {
                         model.exportTake(kind)
                     } label: {

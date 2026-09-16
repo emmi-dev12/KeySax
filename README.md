@@ -67,16 +67,14 @@ Pick **Drums**, Rhodes, glass, chimes, music box, pad, or any sax on a row.
 | Per-row **OCT** / **TR** | Exact octave and transpose |
 | `Tab` | Sustain |
 | `Esc` | All notes off |
-| Record | Then choose export |
+| Record | Letters drop, sentence forms, clip is ready on stop |
 
 ### Export
 
-After recording you can download:
+Record while you play: letters drop down and the sentence writes itself at the bottom. Stop, and the clip is already there.
 
-- **Letters + audio** — one letter per frame, with sound
-- **Letters only** — silent video
-- **Sentence + audio** — letters, then the spelled sentence
-- **Sentence only** — just the sentence card
+- **Video + audio** — the drop-letter clip with sound
+- **Video only** — the same clip, silent
 - **Audio only** — WAV
 
 ### Voices

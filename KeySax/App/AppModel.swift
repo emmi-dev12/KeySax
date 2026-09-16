@@ -2,6 +2,16 @@ import Foundation
 import SwiftUI
 import AppKit
 
+struct StageGlyph: Identifiable {
+    let id = UUID()
+    var keyID: String
+    var glyph: String
+    var color: Color
+    var xFrac: Double
+    var born: Date
+    var ended: Date?
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -28,9 +38,12 @@ final class AppModel {
     var isRenderingVideo = false
     var videoProgress: Double = 0
     var letterHits: [LetterHit] = []
+    var stageLetters: [StageGlyph] = []
+    var liveSentence: String = ""
     var pendingTake: PendingTake?
     var showExportSheet = false
     var statusLine: String = "Press 1–0 to play"
+    let letterCapture = LiveLetterCapture()
 
     private var recordTimer: Timer?
     private var persistTask: Task<Void, Never>?
@@ -280,25 +293,55 @@ final class AppModel {
     }
 
     private func logLetter(keyID: String, glyph: String, voice: VoiceID) {
-        guard isRecording, settings.letterVideo else { return }
         let c = NSColor(voice.accent).usingColorSpace(.sRGB) ?? .white
-        letterHits.append(
-            LetterHit(
+        let xFrac = LetterVideo.lane(for: keyID, salt: stageLetters.count)
+        pruneStage()
+        stageLetters.append(
+            StageGlyph(
                 keyID: keyID,
-                time: audio.recorder.elapsed,
-                end: nil,
                 glyph: glyph,
-                red: c.redComponent,
-                green: c.greenComponent,
-                blue: c.blueComponent
+                color: Color(red: c.redComponent, green: c.greenComponent, blue: c.blueComponent),
+                xFrac: xFrac,
+                born: Date()
             )
         )
+        liveSentence += glyph
+        guard isRecording, settings.letterVideo else { return }
+        let hit = LetterHit(
+            keyID: keyID,
+            time: letterCapture.elapsed,
+            end: nil,
+            glyph: glyph,
+            red: c.redComponent,
+            green: c.greenComponent,
+            blue: c.blueComponent,
+            xFrac: xFrac
+        )
+        letterHits.append(hit)
+        letterCapture.add(hit)
     }
 
     private func endLetter(keyID: String) {
+        if let i = stageLetters.lastIndex(where: { $0.keyID == keyID && $0.ended == nil }) {
+            stageLetters[i].ended = Date()
+        }
+        pruneStage()
         guard isRecording, settings.letterVideo else { return }
+        let t = letterCapture.elapsed
         if let i = letterHits.lastIndex(where: { $0.keyID == keyID && $0.end == nil }) {
-            letterHits[i].end = audio.recorder.elapsed
+            letterHits[i].end = t
+        }
+        letterCapture.end(keyID: keyID, at: t)
+    }
+
+    private func pruneStage() {
+        let now = Date()
+        stageLetters.removeAll { glyph in
+            if let ended = glyph.ended { return now.timeIntervalSince(ended) > 1.2 }
+            return now.timeIntervalSince(glyph.born) > 10
+        }
+        if !isRecording, liveSentence.count > 96 {
+            liveSentence = String(liveSentence.suffix(80))
         }
     }
 
@@ -338,36 +381,51 @@ final class AppModel {
 
     func toggleRecord() {
         if isRecording {
-            let url = audio.recorder.stop()
+            let wav = audio.recorder.stop()
             isRecording = false
             recordTimer?.invalidate()
             let hits = letterHits
-            let elapsed = recordElapsed
-            if let url {
-                let end = hits.last.map { max($0.end ?? $0.time, $0.time) + 0.45 } ?? elapsed
-                pendingTake = PendingTake(
-                    wav: url,
-                    hits: hits,
-                    duration: max(elapsed, end, 0.6),
-                    sentence: hits.map(\.glyph).joined()
-                )
-                showExportSheet = true
-                flash("Choose an export")
+            let elapsed = max(recordElapsed, letterCapture.elapsed)
+            flash("Finishing clip…")
+            Task {
+                let video = settings.letterVideo ? await letterCapture.stop(extraHold: 1.2) : nil
+                if let wav {
+                    let end = hits.last.map { max($0.end ?? $0.time, $0.time) + 0.45 } ?? elapsed
+                    pendingTake = PendingTake(
+                        wav: wav,
+                        video: video,
+                        hits: hits,
+                        duration: max(elapsed, end, 0.6),
+                        sentence: hits.map(\.glyph).joined()
+                    )
+                    showExportSheet = true
+                    flash(video == nil ? "Choose an export" : "Clip is ready")
+                }
             }
         } else {
             do {
+                liveSentence = ""
+                stageLetters = []
+                letterHits = []
+                if settings.letterVideo {
+                    do {
+                        try letterCapture.start()
+                    } catch {
+                        flash("Video capture failed — audio still recording")
+                    }
+                }
                 try audio.recorder.start()
                 isRecording = true
                 recordElapsed = 0
-                letterHits = []
                 recordTimer?.invalidate()
                 recordTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
                     Task { @MainActor in
                         self?.recordElapsed = self?.audio.recorder.elapsed ?? 0
                     }
                 }
-                flash(settings.letterVideo ? "Recording letters" : "Recording")
+                flash(settings.letterVideo ? "Recording — letters drop, sentence forms" : "Recording")
             } catch {
+                Task { _ = await letterCapture.stop(extraHold: 0) }
                 flash("Couldn’t start recording")
             }
         }
@@ -381,19 +439,32 @@ final class AppModel {
             flash("Save audio")
             return
         }
+        if let video = take.video, !kind.wantsAudio {
+            LetterVideo.savePanel(starting: video)
+            flash("Save video")
+            return
+        }
         isRenderingVideo = true
-        videoProgress = 0
-        flash("Exporting \(kind.title.lowercased())…")
+        videoProgress = kind.wantsAudio && take.video != nil ? 0.7 : 0
+        flash(take.video != nil ? "Muxing audio…" : "Exporting \(kind.title.lowercased())…")
         Task {
             do {
-                let url = try await LetterVideo.render(
-                    hits: take.hits,
-                    audioURL: take.wav,
-                    duration: take.duration,
-                    sentence: take.sentence,
-                    kind: kind
-                ) { p in
-                    Task { @MainActor in self.videoProgress = p }
+                let url: URL
+                if let video = take.video, kind.wantsAudio {
+                    let mixed = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("KeySax-letterclip-\(UUID().uuidString).mp4")
+                    try await LetterVideo.mux(video: video, audio: take.wav, dest: mixed)
+                    url = mixed
+                } else {
+                    url = try await LetterVideo.render(
+                        hits: take.hits,
+                        audioURL: take.wav,
+                        duration: take.duration,
+                        sentence: take.sentence,
+                        kind: kind
+                    ) { p in
+                        Task { @MainActor in self.videoProgress = p }
+                    }
                 }
                 await MainActor.run {
                     self.isRenderingVideo = false
@@ -403,8 +474,13 @@ final class AppModel {
             } catch {
                 await MainActor.run {
                     self.isRenderingVideo = false
-                    Recorder.savePanel(starting: take.wav)
-                    self.flash("Video failed — saved WAV")
+                    if let video = take.video {
+                        LetterVideo.savePanel(starting: video)
+                        self.flash("Audio mux failed — save the silent clip")
+                    } else {
+                        Recorder.savePanel(starting: take.wav)
+                        self.flash("Video failed — saved WAV")
+                    }
                 }
             }
         }

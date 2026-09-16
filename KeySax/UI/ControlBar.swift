@@ -136,7 +136,7 @@ struct BottomBar: View {
                     Image(systemName: model.settings.letterVideo ? "textformat" : "textformat")
                 }
                 .opacity(model.settings.letterVideo ? 1 : 0.4)
-                .help(model.settings.letterVideo ? "Letter video on — each key is a frame" : "Letter video off")
+                .help(model.settings.letterVideo ? "Letter video on — letters drop, sentence forms" : "Letter video off")
 
                 Button {
                     model.toggleRecord()

@@ -35,16 +35,15 @@
     <button class="pad space" id="space" type="button" data-space="1"><small>space</small><b>Thump</b></button>
   </div>
 
-  <div class="letter" id="letter"></div>
+  <canvas id="stage" class="stage" aria-hidden="true"></canvas>
+  <canvas id="tape" class="tape" width="720" height="720" hidden aria-hidden="true"></canvas>
 
   <div class="modal" id="export" hidden>
     <div class="sheet">
       <h3>Download</h3>
       <p id="sentence-preview"></p>
-      <button class="choice" data-export="lettersAudio"><b>Letters + audio</b><span>One letter per frame, with sound</span></button>
-      <button class="choice" data-export="lettersVideo"><b>Letters only</b><span>Silent video of each key</span></button>
-      <button class="choice" data-export="sentenceAudio"><b>Sentence + audio</b><span>Letters, then the full sentence</span></button>
-      <button class="choice" data-export="sentenceVideo"><b>Sentence only</b><span>Just the spelled sentence</span></button>
+      <button class="choice" data-export="clipAudio"><b>Video + audio</b><span>Letters dropping, sentence forming, with sound</span></button>
+      <button class="choice" data-export="clipVideo"><b>Video only</b><span>The same clip, silent</span></button>
       <button class="choice" data-export="audioOnly"><b>Audio only</b><span>WAV recording</span></button>
       <button class="chip" id="export-cancel" type="button">Cancel</button>
     </div>
